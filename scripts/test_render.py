@@ -230,6 +230,19 @@ def test_empty_window_states_its_own_snapshot_requirement():
         print("  ok: each empty window states its own snapshot requirement")
 
 
+def test_notice_has_no_broken_number_agreement():
+    """"1 have been collected" - the same plural trap as "over 1 days"."""
+    with tempfile.TemporaryDirectory() as tmp:
+        data = two_snapshot_data(tmp)
+        data["diagnostics"]["snapshots_loaded"] = 1
+        for window in (1, 7, 30):
+            for locale in LOCALES:
+                notice = render_site.window_state_notice(locale, data, window)
+                assert "1 have" not in notice, (locale, window, notice)
+                assert "1 days" not in notice and "1 snapshots" not in notice
+        print("  ok: no broken number agreement at count 1")
+
+
 def test_notice_and_growth_lede_never_co_occur():
     with tempfile.TemporaryDirectory() as tmp:
         data = two_snapshot_data(tmp)
@@ -501,6 +514,7 @@ if __name__ == "__main__":
         test_translated_chrome_actually_differs,
         test_populated_window_shows_no_accumulating_notice,
         test_empty_window_states_its_own_snapshot_requirement,
+        test_notice_has_no_broken_number_agreement,
         test_notice_and_growth_lede_never_co_occur,
         test_page_never_claims_growth_ranking_it_did_not_do,
         test_ranking_source_reports_what_it_returns,

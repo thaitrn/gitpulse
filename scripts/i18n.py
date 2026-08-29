@@ -62,8 +62,8 @@ STRINGS = {
         "notice_title": "Momentum data is still accumulating",
         "notice_body": "GitHub only exposes a repository's current star count, so growth "
                        "rates have to be built up one daily snapshot at a time and cannot "
-                       "be backfilled. This window needs {need} daily snapshots and {have} "
-                       "have been collected, so this list is ordered by star count.",
+                       "be backfilled. This window needs {need} daily snapshots; {have} "
+                       "collected so far, so this list is ordered by star count.",
         "no_history": "no history yet",
         "also_day": "also today",
         "also_week": "also this week",
