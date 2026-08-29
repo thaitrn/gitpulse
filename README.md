@@ -23,8 +23,15 @@ Storage format and query engine are separate concerns.
 
 The page set is entirely static and the only interactive element is a client-side filter.
 A React toolchain would have added `node_modules`, a `basePath` config and the static-export
-deep-link trap, in exchange for nothing this site uses. Stdlib templates render 3,552 pages
-in under 2 seconds.
+deep-link trap, in exchange for nothing this site uses. Stdlib templates render 10,656 pages
+across three locales in about 4 seconds.
+
+## Languages
+
+English at the root, Vietnamese under `/vi/`, Simplified Chinese under `/zh/`. Only site
+chrome is translated — repository descriptions stay as GitHub returns them, because
+machine-translated technical prose is usually worse than the original. Every page declares
+hreflang alternates plus x-default so the locales read as translations, not duplicates.
 
 ## Layout
 
@@ -83,18 +90,19 @@ python3 scripts/generate_sitemaps.py  # renders site/ and sitemaps
 
 | | |
 |---|---|
-| Repos tracked | 32,969 (floor 2,000 stars) |
+| Repos tracked | 32,975 (floor 2,000 stars) |
 | Pages published | 2,708 (gate 14,000 stars, or +5%/7d) |
-| Total URLs | 3,552 |
-| Crawl | 33 min, 463 requests, 4,526/5,000 rate limit left |
-| Render | 1.8 s |
+| Total URLs | 10,656 across 3 locales |
+| Crawl | ~35 min, 463 requests, 4,526/5,000 rate limit left |
+| Render | 4.2 s |
 | Snapshot | 468 KB/day gzipped |
-| Site | 36 MB |
+| Site | 172 MB |
 
 Tracking far more repos than get pages is deliberate: the extra rows feed velocity for
 repos that have not yet earned one.
 
 ## Automation
 
-- `crawl.yml` — 04:20 UTC daily, commits `data/`
+- `crawl.yml` — 04:20 UTC daily, commits `data/`, rebasing if the remote moved
+  during the run (a rejected push would silently discard that day's snapshot)
 - `deploy.yml` — on push, and on a successful crawl, renders and publishes to Pages
