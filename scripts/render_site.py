@@ -213,10 +213,14 @@ def other_windows(record, data, current_window):
 
 def repo_card(locale, record, whitelist, window=7, rank=None, data=None):
     owner, name = record["full_name"].split("/", 1)
-    topics = "".join(
+    pills = "".join(
         f'<a href="{root(locale)}/topics/{slug(topic)}/">{esc(topic)}</a>'
         for topic in prepare_data.card_topics(record, whitelist)
     )
+    # Curation leaves roughly a fifth of cards with no qualifying topic. An empty
+    # .tags element still carries its top margin, so emitting it would put a
+    # phantom gap under those cards and break the list's vertical rhythm.
+    topics = f'<div class="tags">{pills}</div>' if pills else ""
     meta = [f"{compact(record['stars'])} {esc(t(locale, 'stars'))}"]
     if record.get("language"):
         meta.append(
@@ -237,7 +241,7 @@ def repo_card(locale, record, whitelist, window=7, rank=None, data=None):
 <h3 class="card-title"><a href="{root(locale)}{repo_path(record['full_name'])}"><span class="owner">{esc(owner)}/</span>{esc(name)}</a></h3>
 <p class="card-desc">{esc(record.get('description'))}</p>
 <div class="card-meta">{''.join(f'<span>{item}</span>' for item in meta)}</div>
-<div class="tags">{topics}</div>
+{topics}
 </div>
 {momentum(locale, record, window)}
 </article>"""

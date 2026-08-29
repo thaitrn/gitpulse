@@ -317,6 +317,15 @@ def test_card_topics_are_curated_not_raw():
     print("  ok: cards show rarest qualifying topics, stoplist and dupes removed")
 
 
+def test_card_with_no_topics_emits_no_tag_row():
+    """An empty .tags element keeps its margin, leaving a phantom gap."""
+    with tempfile.TemporaryDirectory() as tmp:
+        _data, site_dir = build_into(tmp)
+        for path in site_dir.rglob("index.html"):
+            assert '<div class="tags"></div>' not in path.read_text(), path
+        print("  ok: no empty tag rows rendered")
+
+
 def test_card_topic_ordering_is_deterministic():
     """Equal frequencies must break alphabetically so git diffs stay stable."""
     whitelist = {"zeta": 10, "alpha": 10, "mid": 10}
@@ -434,6 +443,7 @@ if __name__ == "__main__":
         test_truncation_note_present_in_every_locale,
         test_ranking_source_returns_full_pool_not_a_slice,
         test_card_topics_are_curated_not_raw,
+        test_card_with_no_topics_emits_no_tag_row,
         test_card_topic_ordering_is_deterministic,
         test_every_card_pill_links_to_a_page_that_exists,
         test_repo_detail_still_shows_all_topics,
