@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+.DS_Store
+
+# SQLite is a derived artifact rebuilt from data/, never committed.
+*.db
+*.sqlite3
+
+# Site generation output (Phase 02)
+web/node_modules/
+web/.next/
+web/out/

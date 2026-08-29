@@ -1,0 +1,48 @@
+name: crawl
+
+on:
+  schedule:
+    # 04:20 UTC daily. GitHub's scheduler is best-effort and skips runs under
+    # platform load, so the velocity SQL downstream must tolerate missing days.
+    - cron: "20 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: crawl
+  cancel-in-progress: false
+
+jobs:
+  crawl:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Self-checks
+        run: python3 crawler/test_crawler.py
+
+      - name: Crawl
+        env:
+          # Built-in token: read-only for public repo metadata is all the
+          # crawler needs, and it cannot outlive the job.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Without this the whole run's progress appears only at exit, which
+          # makes a hung or slow crawl indistinguishable from a silent one.
+          PYTHONUNBUFFERED: "1"
+        run: python3 crawler/write_snapshot.py
+
+      - name: Commit
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/
+          git diff --staged --quiet && echo "no changes" && exit 0
+          git commit -m "data: snapshot $(date -u +%Y-%m-%d) [skip ci]"
+          git push
