@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>$title</title>
+<meta name="description" content="$description">
+<link rel="canonical" href="$canonical">
+<meta property="og:title" content="$title">
+<meta property="og:description" content="$description">
+<meta property="og:type" content="website">
+<meta property="og:url" content="$canonical">
+<meta name="twitter:card" content="summary">
+<style>
+:root{--bg:#fff;--fg:#1a1a1a;--muted:#666;--line:#e3e3e3;--accent:#0b5;--link:#0645ad}
+@media(prefers-color-scheme:dark){:root{--bg:#151515;--fg:#e8e8e8;--muted:#999;--line:#2e2e2e;--accent:#2d8;--link:#7ab7ff}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+a{color:var(--link)}
+header,main,footer{max-width:64rem;margin:0 auto;padding:0 1rem}
+header{display:flex;gap:1rem;align-items:baseline;flex-wrap:wrap;padding-top:1.2rem;padding-bottom:.6rem;border-bottom:1px solid var(--line)}
+header h1{font-size:1.1rem;margin:0}
+header nav{display:flex;gap:.9rem;flex-wrap:wrap}
+header nav a{text-decoration:none;color:var(--muted)}
+header nav a:hover{color:var(--fg)}
+main{padding-top:1.4rem;padding-bottom:2rem}
+h2{font-size:1.25rem;margin:1.6rem 0 .6rem}
+.repo{padding:.75rem 0;border-bottom:1px solid var(--line)}
+.repo-name{font-weight:600;font-size:1rem}
+.repo-desc{color:var(--fg);margin:.25rem 0}
+.meta{color:var(--muted);font-size:.85rem;display:flex;gap:.9rem;flex-wrap:wrap}
+.up{color:var(--accent);font-weight:600}
+.down{color:var(--muted)}
+.tags a{display:inline-block;margin:.15rem .3rem .15rem 0;padding:.05rem .45rem;border:1px solid var(--line);border-radius:.75rem;font-size:.78rem;text-decoration:none;color:var(--muted)}
+input[type=search]{width:100%;padding:.55rem .7rem;font-size:1rem;border:1px solid var(--line);border-radius:.35rem;background:var(--bg);color:var(--fg)}
+table{border-collapse:collapse;width:100%}
+td,th{text-align:left;padding:.3rem .6rem .3rem 0;border-bottom:1px solid var(--line)}
+footer{color:var(--muted);font-size:.85rem;border-top:1px solid var(--line);padding-top:.8rem;padding-bottom:2rem}
+.spark{display:block;margin:.5rem 0}
+.empty{color:var(--muted);font-style:italic}
+</style>
+$head_extra
+</head>
+<body>
+<header>
+<h1><a href="$base/" style="text-decoration:none;color:inherit">gitpulse</a></h1>
+<nav>
+<a href="$base/trending/day/">Today</a>
+<a href="$base/trending/week/">Week</a>
+<a href="$base/trending/month/">Month</a>
+<a href="$base/topics/">Topics</a>
+<a href="$base/languages/">Languages</a>
+<a href="$base/methodology/">Methodology</a>
+</nav>
+</header>
+<main>
+$body
+</main>
+<footer>
+<p>Repository data from the GitHub API. $generated_note</p>
+<p><a href="$base/methodology/">How ranking works</a> &middot;
+<a href="https://github.com/thaitrn/gitpulse">Source</a></p>
+</footer>
+</body>
+</html>

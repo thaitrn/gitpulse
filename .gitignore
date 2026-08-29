@@ -2,11 +2,9 @@ __pycache__/
 *.pyc
 .DS_Store
 
-# SQLite is a derived artifact rebuilt from data/, never committed.
+# SQLite is a derived artifact rebuilt from data/ on every run, never committed.
 *.db
 *.sqlite3
 
-# Site generation output (Phase 02)
-web/node_modules/
-web/.next/
-web/out/
+# Rendered output: regenerated from data/ in seconds, so it is never committed.
+site/

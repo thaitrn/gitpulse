@@ -1,0 +1,58 @@
+name: deploy
+
+on:
+  push:
+    branches: [main]
+  # Republish as soon as a crawl lands new data, so the site never lags the
+  # dataset by a day.
+  workflow_run:
+    workflows: [crawl]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    # A failed crawl leaves data/ untouched; republishing the previous dataset is
+    # harmless, but publishing after a crash that half-wrote it is not.
+    if: >-
+      github.event_name != 'workflow_run' ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Self-checks
+        env:
+          PYTHONUNBUFFERED: "1"
+        run: |
+          python3 scripts/test_pipeline.py
+          python3 scripts/test_render.py
+
+      - name: Render site
+        env:
+          PYTHONUNBUFFERED: "1"
+        run: python3 scripts/generate_sitemaps.py
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deployment
+        uses: actions/deploy-pages@v4
