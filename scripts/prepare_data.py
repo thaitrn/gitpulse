@@ -44,8 +44,36 @@ STALENESS_TOLERANCE = 3
 SNAPSHOT_LOAD_DAYS = max(WINDOWS) + STALENESS_TOLERANCE + 2
 
 # A topic or language page listing a handful of repos is thin content that drags
-# on site-wide quality signals.
+# on site-wide quality signals. The same threshold decides which topics are real
+# enough to show as pills on a card, so a pill always links to a page that exists
+# and has peers.
 MIN_MEMBERS_FOR_FACET_PAGE = 5
+
+# Cards show at most this many topics. Measured 2026-08-29: repos carry a median
+# of 7 raw topics (mean 8.5, max 20), of which 4 clear the threshold above.
+# Rendering all of them fills each row with near-duplicate keywords.
+MAX_CARD_TOPICS = 2
+
+# Frequent enough to clear the threshold, but they describe a repo's meta status
+# rather than its subject. Chosen from the real corpus, not guessed: hacktoberfest
+# is the second most common topic overall (270 of 2,708 published repos), and
+# awesome/awesome-list/open-source all sit inside the top 40.
+TOPIC_STOPLIST = frozenset({
+    "hacktoberfest", "awesome", "awesome-list", "awesome-lists", "list", "lists",
+    "open-source", "opensource", "oss", "free", "github", "software",
+})
+
+# Topics that merely restate the repo's primary language, which the card already
+# shows as its own chip. "Python · python" is duplication, not information.
+LANGUAGE_TOPIC_ALIASES = {
+    "go": {"golang"},
+    "c#": {"csharp", "dotnet"},
+    "c++": {"cpp", "cplusplus"},
+    "javascript": {"js"},
+    "typescript": {"ts"},
+    "shell": {"bash", "sh"},
+    "jupyter notebook": {"jupyter", "notebook"},
+}
 
 SCHEMA = """
 CREATE TABLE repos (
@@ -188,6 +216,29 @@ def star_history(connection, full_names, days=30):
         if row["full_name"] in history:
             history[row["full_name"]].append((row["date"], row["stars"]))
     return history
+
+
+def card_topics(record, whitelist):
+    """The few topics worth showing on a card, most specific first.
+
+    Ranked by ascending corpus frequency: a rarer qualifying topic distinguishes
+    this repo, while a very common one mostly restates the category. Ties break
+    alphabetically so output is byte-stable across runs.
+    """
+    language = (record.get("language") or "").lower()
+    owner, name = record["full_name"].lower().split("/", 1)
+    # Repos commonly tag themselves with their own name; the card already shows it.
+    redundant = ({language} | LANGUAGE_TOPIC_ALIASES.get(language, set())
+                 | {owner, name})
+    eligible = [
+        topic
+        for topic in record["topics"]
+        if topic in whitelist
+        and topic.lower() not in TOPIC_STOPLIST
+        and topic.lower() not in redundant
+    ]
+    eligible.sort(key=lambda topic: (whitelist[topic], topic))
+    return eligible[:MAX_CARD_TOPICS]
 
 
 def facet_counts(records, key):

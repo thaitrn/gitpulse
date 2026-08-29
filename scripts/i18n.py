@@ -42,6 +42,8 @@ STRINGS = {
         "search_label": "Filter all tracked repositories",
         "search_placeholder": "Search by name or description...",
         "search_none": "No repositories match that search.",
+        "showing_note": "Showing {shown} of {total}.",
+        "home_selection_note": "A selection of {shown}. Browse the full set by topic or language.",
         "rising": "Rising this week",
 
         "lede_day": "Ranked by star growth over the last day.",
@@ -140,6 +142,8 @@ STRINGS = {
         "search_label": "Lọc toàn bộ kho đang theo dõi",
         "search_placeholder": "Tìm theo tên hoặc mô tả...",
         "search_none": "Không có kho nào khớp.",
+        "showing_note": "Hiển thị {shown} trong {total}.",
+        "home_selection_note": "Một tuyển chọn {shown} kho. Xem đầy đủ theo chủ đề hoặc ngôn ngữ.",
         "rising": "Tăng mạnh tuần này",
 
         "lede_day": "Xếp theo mức tăng sao trong 1 ngày qua.",
@@ -228,6 +232,8 @@ STRINGS = {
         "search_label": "筛选所有已跟踪的仓库",
         "search_placeholder": "按名称或描述搜索…",
         "search_none": "没有匹配的仓库。",
+        "showing_note": "显示 {total} 个中的 {shown} 个。",
+        "home_selection_note": "精选 {shown} 个仓库。可按主题或语言浏览完整列表。",
         "rising": "本周上升",
 
         "lede_day": "按过去 1 天的星标增长排序。",

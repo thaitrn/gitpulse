@@ -223,6 +223,97 @@ def test_no_broken_plural_in_any_locale():
         print("  ok: no broken plural in any locale")
 
 
+def test_truncated_list_states_shown_of_total():
+    with tempfile.TemporaryDirectory() as tmp:
+        _data, site_dir = build_into(tmp)
+        rows = [{"full_name": f"o/r{i}"} for i in range(500)]
+        shown, total = render_site.limited(rows, render_site.FACET_CAP)
+        assert len(shown) == render_site.FACET_CAP and total == 500
+        note = render_site.showing_note("en", len(shown), total)
+        assert "200" in note and "500" in note, note
+        print("  ok: truncated list reports shown-of-total")
+
+
+def test_complete_list_says_nothing():
+    """"Showing 12 of 12" is noise, not honesty."""
+    assert render_site.showing_note("en", 12, 12) == ""
+    assert render_site.showing_note("en", 13, 12) == ""
+    print("  ok: complete list renders no truncation note")
+
+
+def test_truncation_note_present_in_every_locale():
+    for locale in LOCALES:
+        note = render_site.showing_note(locale, 200, 500)
+        assert note and "200" in note and "500" in note, (locale, note)
+        assert "1 days" not in note
+    print("  ok: truncation note translated in every locale")
+
+
+def test_ranking_source_returns_full_pool_not_a_slice():
+    """The cap belongs to the renderer that discloses it, not to the ranking."""
+    with tempfile.TemporaryDirectory() as tmp:
+        data, _site_dir = build_into(tmp)
+        _order, pool = render_site.ranking_source(data, 7)
+        assert len(pool) == len(data["trending"][7]) or len(pool) == len(data["records"])
+        print("  ok: ranking_source hands back the whole pool")
+
+
+def test_card_topics_are_curated_not_raw():
+    """Cards must not dump every GitHub topic, and never a stoplisted one."""
+    whitelist = {"alpha": 40, "beta": 9, "gamma": 7, "hacktoberfest": 300,
+                 "python": 200, "mine": 12}
+    record = {
+        "full_name": "someone/mine",
+        "language": "Python",
+        "topics": ["hacktoberfest", "python", "mine", "alpha", "beta", "gamma"],
+    }
+    picked = prepare_data.card_topics(record, whitelist)
+    assert len(picked) <= prepare_data.MAX_CARD_TOPICS, picked
+    assert "hacktoberfest" not in picked, "stoplisted topic rendered"
+    assert "python" not in picked, "topic duplicating the language chip rendered"
+    assert "mine" not in picked, "topic repeating the repo name rendered"
+    # Rarest-first: gamma(7) then beta(9), not alpha(40).
+    assert picked == ["gamma", "beta"], picked
+    print("  ok: cards show rarest qualifying topics, stoplist and dupes removed")
+
+
+def test_card_topic_ordering_is_deterministic():
+    """Equal frequencies must break alphabetically so git diffs stay stable."""
+    whitelist = {"zeta": 10, "alpha": 10, "mid": 10}
+    record = {"full_name": "o/r", "language": None,
+              "topics": ["zeta", "mid", "alpha"]}
+    assert prepare_data.card_topics(record, whitelist) == ["alpha", "mid"]
+    print("  ok: topic ordering deterministic on frequency ties")
+
+
+def test_every_card_pill_links_to_a_page_that_exists():
+    """A pill pointing at an ungenerated topic page is a 404 in a hot path."""
+    with tempfile.TemporaryDirectory() as tmp:
+        data, site_dir = build_into(tmp)
+        generated = {
+            path.parent.name
+            for path in (site_dir / "topics").glob("*/index.html")
+        }
+        for record in data["records"]:
+            for topic in prepare_data.card_topics(record, data["topics"]):
+                assert render_site.slug(topic) in generated, (
+                    f"{record['full_name']} pill '{topic}' has no topic page"
+                )
+        print("  ok: every card pill resolves to a generated topic page")
+
+
+def test_repo_detail_still_shows_all_topics():
+    """Curation applies to cards only; the detail page stays complete."""
+    with tempfile.TemporaryDirectory() as tmp:
+        data, site_dir = build_into(tmp)
+        record = next(r for r in data["records"] if r["topics"])
+        owner, name = record["full_name"].split("/", 1)
+        markup = (site_dir / "repo" / owner / name / "index.html").read_text()
+        for topic in record["topics"]:
+            assert render_site.esc(topic) in markup, f"detail page dropped {topic}"
+        print("  ok: repo detail page still lists every topic")
+
+
 def test_crawled_text_is_escaped():
     with tempfile.TemporaryDirectory() as tmp:
         _data, site_dir = build_into(tmp)
@@ -294,6 +385,14 @@ if __name__ == "__main__":
         test_page_never_claims_growth_ranking_it_did_not_do,
         test_ranking_source_reports_what_it_returns,
         test_no_broken_plural_in_any_locale,
+        test_truncated_list_states_shown_of_total,
+        test_complete_list_says_nothing,
+        test_truncation_note_present_in_every_locale,
+        test_ranking_source_returns_full_pool_not_a_slice,
+        test_card_topics_are_curated_not_raw,
+        test_card_topic_ordering_is_deterministic,
+        test_every_card_pill_links_to_a_page_that_exists,
+        test_repo_detail_still_shows_all_topics,
         test_crawled_text_is_escaped,
         test_json_ld_is_valid_json_and_cannot_break_out,
         test_velocity_branch_promotes_only_the_riser,

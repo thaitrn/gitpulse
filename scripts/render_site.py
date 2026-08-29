@@ -30,6 +30,14 @@ BASE = "/gitpulse"
 ORIGIN = "https://thaitrn.github.io"
 
 WINDOWS = {1: "day", 7: "week", 30: "month"}
+
+# List caps. Measured 2026-08-29: only 8 of 837 facet pages hold more than 200
+# members (largest 514), so raising the cap would add weight to exactly the
+# heaviest pages for almost no reach. Caps stay; what changes is that a truncated
+# list now says so.
+TRENDING_CAP = 100
+FACET_CAP = 200
+HOME_CAP = 30
 NAV_ITEMS = (
     ("day", "/trending/day/"),
     ("week", "/trending/week/"),
@@ -172,11 +180,11 @@ def momentum(locale, record, window=7):
             f'<span class="mom-sub">{delta:+,} &middot; {window}d</span></div>')
 
 
-def repo_card(locale, record, window=7, rank=None):
+def repo_card(locale, record, whitelist, window=7, rank=None):
     owner, name = record["full_name"].split("/", 1)
     topics = "".join(
         f'<a href="{root(locale)}/topics/{slug(topic)}/">{esc(topic)}</a>'
-        for topic in record["topics"][:5]
+        for topic in prepare_data.card_topics(record, whitelist)
     )
     meta = [f"{compact(record['stars'])} {esc(t(locale, 'stars'))}"]
     if record.get("language"):
@@ -329,10 +337,28 @@ def ranking_source(data, window):
     page must not be able to describe itself differently from what it did, so
     the decision and the wording now come from the same value.
     """
-    ranked = data["trending"][window][:100]
+    ranked = data["trending"][window]
     if ranked:
         return "growth", ranked
-    return "stars", data["records"][:50]
+    return "stars", data["records"]
+
+
+def limited(rows, cap):
+    """Slice a list and hand back the true total in one call.
+
+    Returning both from one place is what stops the page from cutting rows while
+    the surrounding copy implies completeness — the same failure the trending
+    lede had. Callers must render `showing_note` with the total.
+    """
+    return rows[:cap], len(rows)
+
+
+def showing_note(locale, shown, total):
+    """Silent when nothing was cut: "Showing 12 of 12" is noise, not honesty."""
+    if shown >= total:
+        return ""
+    return (f'<p class="mom-sub" style="font-size:14px;margin-bottom:var(--s4)">'
+            f'{esc(t(locale, "showing_note", shown=f"{shown:,}", total=f"{total:,}"))}</p>')
 
 
 def fallback_notice(locale):
@@ -343,9 +369,10 @@ def fallback_notice(locale):
 
 def render_trending(locale, data):
     for window, name in WINDOWS.items():
-        order, ranked = ranking_source(data, window)
+        order, pool = ranking_source(data, window)
+        ranked, total = limited(pool, TRENDING_CAP)
         listing = "".join(
-            repo_card(locale, record, window, rank=index)
+            repo_card(locale, record, data["topics"], window, rank=index)
             for index, record in enumerate(ranked, 1)
         )
         if order == "growth":
@@ -368,7 +395,7 @@ def render_trending(locale, data):
                 path,
                 f"<h1>{esc(t(locale, f'window_{name}'))}</h1>"
                 f'<p class="lede">{esc(lede)}</p>'
-                f"{explanation}{listing}",
+                f"{explanation}{showing_note(locale, len(ranked), total)}{listing}",
                 data["generated_at"],
                 nav_key=name,
             ),
@@ -408,7 +435,10 @@ def render_facets(locale, data):
                 if (value in record["topics"] if kind == "topics"
                     else record.get("language") == value)
             ]
-            listing = "".join(repo_card(locale, record) for record in members[:200])
+            shown, total = limited(members, FACET_CAP)
+            listing = "".join(
+                repo_card(locale, record, data["topics"]) for record in shown
+            )
             path = f"/{kind}/{slug(value)}/"
             write(
                 locale,
@@ -419,8 +449,8 @@ def render_facets(locale, data):
                     t(locale, "facet_page_desc", value=value),
                     path,
                     f"<h1>{esc(value)}</h1>"
-                    f'<p class="lede">{esc(t(locale, "facet_members", count=len(members)))}</p>'
-                    f"{listing}",
+                    f'<p class="lede">{esc(t(locale, "facet_members", count=f"{total:,}"))}</p>'
+                    f"{showing_note(locale, len(shown), total)}{listing}",
                     data["generated_at"],
                     nav_key=kind,
                 ),
@@ -428,11 +458,14 @@ def render_facets(locale, data):
 
 
 def render_home(locale, data):
-    ranked = data["trending"][7][:30] or data["records"][:30]
+    pool = data["trending"][7] or data["records"]
+    ranked, _total = limited(pool, HOME_CAP)
     listing = "".join(
-        repo_card(locale, record, rank=index)
+        repo_card(locale, record, data["topics"], rank=index)
         for index, record in enumerate(ranked, 1)
     )
+    selection = (f'<p class="mom-sub" style="font-size:14px;margin-bottom:var(--s4)">'
+                 f'{esc(t(locale, "home_selection_note", shown=len(ranked)))}</p>')
     search = f"""<label for="q" style="display:block;font-size:14px;color:var(--muted);margin-bottom:var(--s2)">{esc(t(locale, 'search_label'))}</label>
 <input type="search" id="q" placeholder="{esc(t(locale, 'search_placeholder'))}" autocomplete="off">
 <div id="results" aria-live="polite"></div>
@@ -460,6 +493,7 @@ async function run(){{
 {search}
 <h2>{esc(t(locale, 'rising'))}</h2>
 {history_notice(locale, data)}
+{selection}
 {listing}"""
     write(
         locale,
