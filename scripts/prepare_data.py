@@ -33,6 +33,16 @@ MIN_VELOCITY_PCT = 5.0
 MIN_ABS_DELTA = 50
 ACTIVE_DAYS = 180
 
+# Lifetime stars per day, used to order lists before real velocity exists.
+# Unlike the windowed figures it needs no history — one snapshot and a creation
+# date are enough — so it works from day one. It is a proxy, not a measurement:
+# a project that exploded a year ago and has since gone flat still scores high.
+# Real windowed velocity supersedes it wherever available.
+#
+# Below this age the rate is noise: the crawl floor is 2,000 stars, so a repo
+# that reaches it on its first day would score 2,000/day and top every list.
+MIN_AGE_DAYS_FOR_RATE = 7
+
 # Velocity windows, and how stale a substitute snapshot may be before the window
 # stops being honest. 3 days absorbs the occasional skipped cron run without
 # letting a "7d" figure silently span three weeks.
@@ -204,6 +214,22 @@ def published(connection):
     return records
 
 
+def add_star_rate(records, today=None):
+    """Attach lifetime stars/day, or None when the repo is too young to judge."""
+    today = today or dt.date.today()
+    for record in records:
+        created = record.get("created_at")
+        if not created:
+            record["star_rate"] = None
+            continue
+        year, month, day = (int(part) for part in created.split("-"))
+        age = (today - dt.date(year, month, day)).days
+        record["star_rate"] = (
+            record["stars"] / age if age >= MIN_AGE_DAYS_FOR_RATE else None
+        )
+    return records
+
+
 def star_history(connection, full_names, days=30):
     """{full_name: [(date, stars), ...]} for the sparkline, newest last."""
     history = {name: [] for name in full_names}
@@ -279,6 +305,7 @@ def build():
     compute_velocity(connection)
 
     records = published(connection)
+    add_star_rate(records)
     history = star_history(connection, [r["full_name"] for r in records])
 
     return {

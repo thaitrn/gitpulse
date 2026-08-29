@@ -408,6 +408,13 @@ def ranking_source(data, window):
     ranked = data["trending"][window]
     if ranked:
         return "growth", ranked
+    # Before real velocity exists, ordering by total stars produces the all-time
+    # list — median age of the top 100 was 7.6 years on a page titled "trending".
+    # Lifetime stars per day needs no history and drops that to 0.5 years.
+    by_rate = [r for r in data["records"] if r.get("star_rate") is not None]
+    if by_rate:
+        by_rate.sort(key=lambda r: (-r["star_rate"], r["full_name"]))
+        return "rate", by_rate
     return "stars", data["records"]
 
 
@@ -443,7 +450,7 @@ def render_trending(locale, data):
             repo_card(locale, record, data["topics"], window, rank=index, data=data)
             for index, record in enumerate(ranked, 1)
         )
-        lede = t(locale, f"lede_{name}") if order == "growth" else t(locale, "lede_stars")
+        lede = t(locale, f"lede_{name}") if order == "growth" else t(locale, f"lede_{order}")
         explanation = window_state_notice(locale, data, window)
         path = f"/trending/{name}/"
         write(

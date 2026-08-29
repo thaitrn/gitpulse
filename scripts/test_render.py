@@ -7,6 +7,7 @@ sitemap URL with no file behind it, a deep link that only works under client-sid
 navigation, and crawled text escaping into markup.
 """
 
+import datetime as dt
 import gzip
 import json
 import pathlib
@@ -277,9 +278,14 @@ def test_page_never_claims_growth_ranking_it_did_not_do():
         markup = (site_dir / "trending" / "day" / "index.html").read_text()
         growth_claim = render_site.t("en", "lede_day")
         assert growth_claim not in markup, "page claimed growth ranking it did not do"
-        assert render_site.t("en", "lede_stars") in markup, "star ordering not stated"
+        # Whatever fallback ordering was used, the page must name that one.
+        order, _rows = render_site.ranking_source(data, 1)
+        assert order != "growth"
+        assert render_site.esc(render_site.t("en", f"lede_{order}")) in markup, (
+            f"page did not state the {order} ordering it actually used"
+        )
         assert render_site.t("en", "fallback_title") in markup, "no explanation shown"
-        print("  ok: empty window states star ordering and explains why")
+        print(f"  ok: empty window states its actual ordering ({order}) and explains why")
 
 
 def test_ranking_source_reports_what_it_returns():
@@ -289,8 +295,13 @@ def test_ranking_source_reports_what_it_returns():
         assert order == "growth" and rows, order
         data["trending"][7] = []
         order, rows = render_site.ranking_source(data, 7)
+        assert order == "rate" and rows, order
+        # Only when no repo is old enough to rate does it fall through to stars.
+        for record in data["records"]:
+            record["star_rate"] = None
+        order, rows = render_site.ranking_source(data, 7)
         assert order == "stars" and rows, order
-        print("  ok: ranking_source labels growth vs stars correctly")
+        print("  ok: ranking_source labels growth, rate and stars correctly")
 
 
 def test_no_broken_plural_in_any_locale():
@@ -368,6 +379,31 @@ def test_truncation_note_present_in_every_locale():
         assert note and "200" in note and "500" in note, (locale, note)
         assert "1 days" not in note
     print("  ok: truncation note translated in every locale")
+
+
+def test_fallback_orders_by_rate_not_total_stars():
+    """Total stars on a trending page yields the all-time list, median age 7.6y."""
+    with tempfile.TemporaryDirectory() as tmp:
+        data, _site_dir = build_into(tmp)
+        data["trending"][7] = []
+        order, rows = render_site.ranking_source(data, 7)
+        assert order == "rate", order
+        rates = [r["star_rate"] for r in rows]
+        assert rates == sorted(rates, reverse=True), "not ordered by rate"
+        assert all(r is not None for r in rates), "unrated repo leaked into the list"
+        print("  ok: fallback ranks by stars per day, not total stars")
+
+
+def test_repo_too_young_gets_no_rate():
+    """A repo hitting the 2,000-star crawl floor on day one would score 2,000/day."""
+    records = [
+        {"full_name": "new/repo", "stars": 2_000, "created_at": "2026-08-29"},
+        {"full_name": "old/repo", "stars": 2_000, "created_at": "2020-01-01"},
+    ]
+    prepare_data.add_star_rate(records, today=dt.date(2026, 8, 30))
+    assert records[0]["star_rate"] is None, "1-day-old repo got a rate"
+    assert records[1]["star_rate"] is not None
+    print("  ok: repos below the age floor carry no rate")
 
 
 def test_ranking_source_returns_full_pool_not_a_slice():
@@ -526,6 +562,8 @@ if __name__ == "__main__":
         test_truncated_list_states_shown_of_total,
         test_complete_list_says_nothing,
         test_truncation_note_present_in_every_locale,
+        test_fallback_orders_by_rate_not_total_stars,
+        test_repo_too_young_gets_no_rate,
         test_ranking_source_returns_full_pool_not_a_slice,
         test_card_topics_are_curated_not_raw,
         test_card_with_no_topics_emits_no_tag_row,
