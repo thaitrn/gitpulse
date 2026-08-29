@@ -27,6 +27,25 @@ Track the snapshot count, not the calendar: `ls data/snapshots/ | wc -l`.
 Every render prints `with_velocity_by_window`, so the deploy log states which
 windows are live without anyone having to remember to look.
 
+## The first 1-day figure spans 11.6 hours, not 24
+
+Velocity is keyed on snapshot **dates**, not elapsed time. The first snapshot was
+written at 2026-08-29 16:45 UTC by a manual run; the second arrives at
+2026-08-30 04:20 UTC from the cron. Their dates differ by one, so the delta is
+labelled "1 day" while covering 11.6 hours.
+
+Consequences for the first checkpoint, so neither is mistaken for a defect:
+
+- 1-day deltas will read roughly half what a full day would produce. Do not
+  conclude the calculation is wrong when spot-checking against GitHub — compare
+  against the same 11.6-hour span, not against 24 hours.
+- `MIN_ABS_DELTA = 50` is therefore applied to a half-length window. If nothing
+  clears it, `/trending/day` correctly shows the `no_movers` state. That is the
+  gate working, not a bug.
+
+Cron-to-cron gaps are ~24 hours, so this affects only the first pair. It is not
+worth special-casing a transient, but it is worth not misreading.
+
 ## Checkpoint: 2 snapshots
 
 The cross-window badge renders here, not at 8 — on `/trending/week`,
