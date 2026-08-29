@@ -1,4 +1,4 @@
-"""Render the published set to static HTML.
+"""Render the published set to static HTML, once per locale.
 
 Every page is written as <path>/index.html so a deep link resolves on a plain
 static host without rewrite rules — the standard trap that makes a statically
@@ -16,7 +16,9 @@ import pathlib
 import string
 import urllib.parse
 
+import i18n
 import prepare_data
+from i18n import LOCALES, LOCALE_NAMES, LOCALE_TAGS, t
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 SITE_DIR = ROOT / "site"
@@ -27,7 +29,27 @@ TEMPLATE = string.Template((ROOT / "templates" / "base.html").read_text())
 BASE = "/gitpulse"
 ORIGIN = "https://thaitrn.github.io"
 
-WINDOW_LABELS = {1: ("day", "Today"), 7: ("week", "This week"), 30: ("month", "This month")}
+WINDOWS = {1: "day", 7: "week", 30: "month"}
+NAV_ITEMS = (
+    ("day", "/trending/day/"),
+    ("week", "/trending/week/"),
+    ("month", "/trending/month/"),
+    ("topics", "/topics/"),
+    ("languages", "/languages/"),
+    ("methodology", "/methodology/"),
+)
+
+# Below this many points a line is noise rather than a trend, so the repo page
+# shows stat tiles instead of a chart.
+MIN_POINTS_FOR_CHART = 4
+
+# Geometric arrows as inline SVG rather than emoji or text glyphs: consistent
+# across platforms, inherits currentColor, and stays aria-hidden because the
+# direction is already stated in the adjacent aria-label.
+ARROW_UP = ('<svg width="9" height="9" viewBox="0 0 10 10" aria-hidden="true">'
+            '<path d="M5 1 9 8.5H1Z" fill="currentColor"/></svg>')
+ARROW_DOWN = ('<svg width="9" height="9" viewBox="0 0 10 10" aria-hidden="true">'
+              '<path d="M5 9 1 1.5h8Z" fill="currentColor"/></svg>')
 
 
 def esc(value):
@@ -44,61 +66,156 @@ def slug(value):
     return urllib.parse.quote(str(value), safe="")
 
 
-def write(path_parts, markup):
-    target = SITE_DIR.joinpath(*path_parts) / "index.html"
+def compact(number):
+    """12,345 -> 12.3k. Keeps dense list rows scannable; detail pages use full."""
+    if number >= 1_000_000:
+        return f"{number / 1_000_000:.1f}M".replace(".0M", "M")
+    if number >= 1_000:
+        return f"{number / 1_000:.1f}k".replace(".0k", "k")
+    return str(number)
+
+
+def root(locale):
+    """URL prefix for a locale, e.g. "/gitpulse" or "/gitpulse/vi"."""
+    return f"{BASE}{i18n.prefix(locale)}"
+
+
+def site_path(locale, path):
+    """Filesystem path parts for a locale-relative URL path."""
+    parts = [segment for segment in path.strip("/").split("/") if segment]
+    return ([locale] if locale != LOCALES[0] else []) + parts
+
+
+def write(locale, path, markup):
+    target = SITE_DIR.joinpath(*site_path(locale, path)) / "index.html"
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(markup)
     return target
 
 
-def page(title, description, canonical_path, body, generated_at, head_extra=""):
+def alternates(path):
+    """hreflang links so the locales read as translations, not duplicate content."""
+    links = [
+        f'<link rel="alternate" hreflang="{LOCALE_TAGS[code]}" '
+        f'href="{ORIGIN}{root(code)}{path}">'
+        for code in LOCALES
+    ]
+    links.append(
+        f'<link rel="alternate" hreflang="x-default" '
+        f'href="{ORIGIN}{root(LOCALES[0])}{path}">'
+    )
+    return "\n".join(links)
+
+
+def nav_markup(locale, current):
+    items = "".join(
+        f'<a href="{root(locale)}{href}"'
+        f'{" aria-current=\"page\"" if key == current else ""}>'
+        f"{esc(t(locale, f'nav_{key}'))}</a>"
+        for key, href in NAV_ITEMS
+    )
+    return f'<nav aria-label="{esc(t(locale, "nav_label"))}">{items}</nav>'
+
+
+def language_switcher(locale, path):
+    """Links to the same page in every locale, not just to each locale's home."""
+    items = "".join(
+        f'<a href="{ORIGIN if False else ""}{root(code)}{path}" lang="{LOCALE_TAGS[code]}"'
+        f'{" aria-current=\"true\"" if code == locale else ""}>'
+        f"{esc(LOCALE_NAMES[code])}</a>"
+        for code in LOCALES
+    )
+    return (f'<div class="langs" role="group" '
+            f'aria-label="{esc(t(locale, "lang_label"))}">{items}</div>')
+
+
+def page(locale, title, description, path, body, generated_at,
+         nav_key=None, head_extra=""):
     return TEMPLATE.substitute(
+        lang=LOCALE_TAGS[locale],
         title=esc(title),
         description=esc(description),
-        canonical=esc(f"{ORIGIN}{BASE}{canonical_path}"),
-        base=BASE,
+        canonical=esc(f"{ORIGIN}{root(locale)}{path}"),
+        alternates=alternates(path),
+        skip_label=esc(t(locale, "skip")),
+        home_href=f"{root(locale)}/",
+        nav=nav_markup(locale, nav_key),
+        lang_switcher=language_switcher(locale, path),
+        methodology_href=f"{root(locale)}/methodology/",
+        footer_data=esc(t(locale, "footer_data", date=generated_at[:10])),
+        footer_how=esc(t(locale, "footer_how")),
+        footer_source=esc(t(locale, "footer_source")),
         body=body,
         head_extra=head_extra,
-        generated_note=esc(f"Updated {generated_at[:10]}."),
     )
 
 
-def repo_url(full_name):
+def repo_path(full_name):
     owner, name = full_name.split("/", 1)
-    return f"{BASE}/repo/{slug(owner)}/{slug(name)}/"
+    return f"/repo/{slug(owner)}/{slug(name)}/"
 
 
-def velocity_badge(record, window=7):
+def momentum(locale, record, window=7):
+    """The differentiator, given its own column and the largest number on a card.
+
+    Direction is carried by an arrow and a signed number, never by colour alone.
+    """
     delta, pct = record.get(f"star_{window}d"), record.get(f"star_{window}d_pct")
     if delta is None or pct is None:
-        return '<span class="down">no history yet</span>'
-    css = "up" if delta > 0 else "down"
-    return f'<span class="{css}">{delta:+,} ({pct:+.1f}%) / {window}d</span>'
+        return ('<div class="momentum"><span class="mom-value mom-none">&mdash;</span>'
+                f'<span class="mom-sub">{esc(t(locale, "no_history"))}</span></div>')
+    arrow = ARROW_UP if delta > 0 else ARROW_DOWN
+    css = "mom-up" if delta > 0 else "mom-down"
+    label = f"{delta:+,} {t(locale, 'stars')}, {window}d"
+    return (f'<div class="momentum"><span class="mom-value {css}" '
+            f'aria-label="{esc(label)}">{arrow}{pct:+.1f}%</span>'
+            f'<span class="mom-sub">{delta:+,} &middot; {window}d</span></div>')
 
 
-def repo_card(record, window=7):
+def repo_card(locale, record, window=7, rank=None):
+    owner, name = record["full_name"].split("/", 1)
     topics = "".join(
-        f'<a href="{BASE}/topics/{slug(topic)}/">{esc(topic)}</a>'
-        for topic in record["topics"][:6]
+        f'<a href="{root(locale)}/topics/{slug(topic)}/">{esc(topic)}</a>'
+        for topic in record["topics"][:5]
     )
-    language = (
-        f'<a href="{BASE}/languages/{slug(record["language"])}/">{esc(record["language"])}</a>'
-        if record.get("language")
-        else ""
-    )
-    return f"""<div class="repo">
-<div class="repo-name"><a href="{repo_url(record['full_name'])}">{esc(record['full_name'])}</a></div>
-<p class="repo-desc">{esc(record.get('description'))}</p>
-<div class="meta"><span>{record['stars']:,} stars</span>{f'<span>{language}</span>' if language else ''}<span>{velocity_badge(record, window)}</span></div>
+    meta = [f"{compact(record['stars'])} {esc(t(locale, 'stars'))}"]
+    if record.get("language"):
+        meta.append(
+            f'<a href="{root(locale)}/languages/{slug(record["language"])}/">'
+            f'{esc(record["language"])}</a>'
+        )
+    if record.get("pushed_at"):
+        meta.append(f"{esc(t(locale, 'pushed'))} {esc(record['pushed_at'])}")
+    rank_markup = f'<div class="card-rank">{rank}</div>' if rank else ""
+    return f"""<article class="card">{rank_markup}
+<div>
+<h3 class="card-title"><a href="{root(locale)}{repo_path(record['full_name'])}"><span class="owner">{esc(owner)}/</span>{esc(name)}</a></h3>
+<p class="card-desc">{esc(record.get('description'))}</p>
+<div class="card-meta">{''.join(f'<span>{item}</span>' for item in meta)}</div>
 <div class="tags">{topics}</div>
-</div>"""
+</div>
+{momentum(locale, record, window)}
+</article>"""
 
 
-def sparkline(points, width=520, height=44):
-    """Inline SVG from (date, stars) pairs. No chart library for a polyline."""
+def history_notice(locale, data):
+    """One explanation per page, instead of repeating it on every row.
+
+    Empty states should say what is missing and when it arrives, not sit blank —
+    and repeating the same sentence on 30 cards is noise, not guidance.
+    """
+    if data["diagnostics"]["with_velocity"]:
+        return ""
+    return (f'<div class="notice"><h3>{esc(t(locale, "notice_title"))}</h3>'
+            f'<p>{esc(t(locale, "notice_body", have=data["diagnostics"]["snapshots_loaded"]))}'
+            f"</p></div>")
+
+
+def sparkline(points, width=560, height=48):
+    """Inline SVG polyline. Below MIN_POINTS_FOR_CHART a line would be noise."""
     values = [stars for _date, stars in points]
-    if len(values) < 2:
-        return '<p class="empty">Not enough history for a chart yet.</p>'
+    if len(values) < MIN_POINTS_FOR_CHART:
+        return ""
     low, high = min(values), max(values)
     span = (high - low) or 1
     step = width / (len(values) - 1)
@@ -110,49 +227,29 @@ def sparkline(points, width=520, height=44):
     )
     return (
         f'<svg class="spark" viewBox="0 0 {width} {height}" width="100%" height="{height}" '
-        f'role="img" aria-label="Star history, {values[0]:,} to {values[-1]:,}">'
-        f'<polyline fill="none" stroke="currentColor" stroke-width="1.5" points="{coords}"/></svg>'
+        f'role="img" aria-label="{values[0]:,} to {values[-1]:,} over {len(values)} days">'
+        f'<polyline fill="none" stroke="currentColor" stroke-width="1.75" '
+        f'stroke-linejoin="round" points="{coords}"/></svg>'
     )
 
 
-def render_repo_pages(data):
-    for record in data["records"]:
-        full_name = record["full_name"]
-        owner, name = full_name.split("/", 1)
-        history = data["history"].get(full_name, [])
-        topics = "".join(
-            f'<a href="{BASE}/topics/{slug(topic)}/">{esc(topic)}</a>'
-            for topic in record["topics"]
+def stat_tiles(locale, record):
+    """Always rendered: the accessible text form of the same numbers as the chart."""
+    tiles = []
+    for window, name in WINDOWS.items():
+        delta = record.get(f"star_{window}d")
+        pct = record.get(f"star_{window}d_pct")
+        value = (
+            f"{delta:+,} <span style='font-size:15px;color:var(--muted)'>({pct:+.1f}%)</span>"
+            if delta is not None and pct is not None
+            else '<span style="color:var(--muted)">&mdash;</span>'
         )
-        rows = "".join(
-            f"<tr><td>{label}</td><td>{velocity_badge(record, window)}</td></tr>"
-            for window, (_slug, label) in WINDOW_LABELS.items()
+        tiles.append(
+            f'<div class="stat"><span class="stat-label">'
+            f'{esc(t(locale, f"window_{name}"))}</span>'
+            f'<span class="stat-value">{value}</span></div>'
         )
-        body = f"""<h2>{esc(full_name)}</h2>
-<p class="repo-desc">{esc(record.get('description'))}</p>
-<div class="meta">
-<span>{record['stars']:,} stars</span><span>{record['forks']:,} forks</span>
-{f"<span>{esc(record['language'])}</span>" if record.get('language') else ''}
-{f"<span>{esc(record['license'])}</span>" if record.get('license') else ''}
-<span>pushed {esc(record.get('pushed_at'))}</span>
-</div>
-<p><a href="https://github.com/{esc(full_name)}" target="_blank" rel="noopener noreferrer">View on GitHub &rarr;</a></p>
-<h2>Star history</h2>
-{sparkline(history)}
-<table><tbody>{rows}</tbody></table>
-<h2>Topics</h2>
-<div class="tags">{topics or '<span class="empty">none</span>'}</div>
-{json_ld(record)}"""
-        write(
-            ["repo", slug(owner), slug(name)],
-            page(
-                f"{full_name} — {record.get('language') or 'repository'}",
-                (record.get("description") or full_name)[:155],
-                f"/repo/{slug(owner)}/{slug(name)}/",
-                body,
-                data["generated_at"],
-            ),
-        )
+    return f'<div class="stats">{"".join(tiles)}</div>'
 
 
 def json_ld(record):
@@ -175,91 +272,172 @@ def json_ld(record):
     return f'<script type="application/ld+json">{encoded}</script>'
 
 
-def render_trending(data):
-    for window, (window_slug, label) in WINDOW_LABELS.items():
-        ranked = data["trending"][window][:100]
-        listing = "".join(repo_card(record, window) for record in ranked) or (
-            '<p class="empty">Not enough snapshot history yet. Velocity needs '
-            "several consecutive daily crawls before this page has numbers.</p>"
+def render_repo_pages(locale, data):
+    for record in data["records"]:
+        full_name = record["full_name"]
+        owner, name = full_name.split("/", 1)
+        history = data["history"].get(full_name, [])
+        topics = "".join(
+            f'<a href="{root(locale)}/topics/{slug(topic)}/">{esc(topic)}</a>'
+            for topic in record["topics"]
         )
+        chart = sparkline(history) or (
+            f'<p class="mom-sub" style="font-size:14px">'
+            f'{esc(t(locale, "repo_no_chart", have=len(history), need=MIN_POINTS_FOR_CHART))}'
+            f"</p>"
+        )
+        facts = [
+            f"{record['stars']:,} {esc(t(locale, 'stars'))}",
+            f"{record['forks']:,} {esc(t(locale, 'forks'))}",
+        ]
+        if record.get("language"):
+            facts.append(esc(record["language"]))
+        if record.get("license"):
+            facts.append(esc(record["license"]))
+        facts.append(f"{esc(t(locale, 'pushed'))} {esc(record.get('pushed_at'))}")
+
+        body = f"""<h1><span style="color:var(--muted);font-weight:450">{esc(owner)}/</span>{esc(name)}</h1>
+<p class="lede">{esc(record.get('description'))}</p>
+<div class="card-meta" style="margin-bottom:var(--s5)">{''.join(f'<span>{item}</span>' for item in facts)}</div>
+<p><a href="https://github.com/{esc(full_name)}" target="_blank" rel="noopener noreferrer">{esc(t(locale, 'repo_github'))} &rarr;</a></p>
+<h2>{esc(t(locale, 'repo_momentum'))}</h2>
+{stat_tiles(locale, record)}
+{chart}
+<h2>{esc(t(locale, 'repo_topics'))}</h2>
+<div class="tags">{topics or f'<span class="mom-sub">{esc(t(locale, "repo_none"))}</span>'}</div>
+{json_ld(record)}"""
         write(
-            ["trending", window_slug],
+            locale,
+            repo_path(full_name),
             page(
-                f"Trending repositories — {label.lower()}",
-                f"GitHub repositories gaining stars fastest over the last {window} day(s).",
-                f"/trending/{window_slug}/",
-                f"<h2>{esc(label)}</h2>{listing}",
+                locale,
+                f"{full_name} — {record.get('language') or 'repository'}",
+                (record.get("description") or full_name)[:155],
+                repo_path(full_name),
+                body,
                 data["generated_at"],
             ),
         )
 
 
-def render_facets(data):
-    for kind, counts, heading in (
-        ("topics", data["topics"], "Topics"),
-        ("languages", data["languages"], "Languages"),
-    ):
-        index_rows = "".join(
-            f'<tr><td><a href="{BASE}/{kind}/{slug(value)}/">{esc(value)}</a></td>'
+def render_trending(locale, data):
+    for window, name in WINDOWS.items():
+        ranked = data["trending"][window][:100] or data["records"][:50]
+        listing = "".join(
+            repo_card(locale, record, window, rank=index)
+            for index, record in enumerate(ranked, 1)
+        )
+        path = f"/trending/{name}/"
+        write(
+            locale,
+            path,
+            page(
+                locale,
+                f"{t(locale, f'window_{name}')} — gitpulse",
+                t(locale, "trending_desc", days=window),
+                path,
+                f"<h1>{esc(t(locale, f'window_{name}'))}</h1>"
+                f'<p class="lede">{esc(t(locale, "trending_lede", days=window))}</p>'
+                f"{history_notice(locale, data)}{listing}",
+                data["generated_at"],
+                nav_key=name,
+            ),
+        )
+
+
+def render_facets(locale, data):
+    for kind, counts in (("topics", data["topics"]), ("languages", data["languages"])):
+        heading = t(locale, f"{kind}_h1")
+        rows = "".join(
+            f'<tr><td><a href="{root(locale)}/{kind}/{slug(value)}/">{esc(value)}</a></td>'
             f"<td>{count}</td></tr>"
             for value, count in counts.items()
         )
         write(
-            [kind],
+            locale,
+            f"/{kind}/",
             page(
+                locale,
                 f"{heading} — gitpulse",
-                f"Browse tracked GitHub repositories by {kind[:-1]}.",
+                t(locale, "facet_desc", kind=heading.lower()),
                 f"/{kind}/",
-                f"<h2>{heading}</h2><table><tbody>{index_rows}</tbody></table>",
+                f"<h1>{esc(heading)}</h1>"
+                f'<p class="lede">'
+                f'{esc(t(locale, "facet_lede", count=len(counts), kind=heading.lower(), min=prepare_data.MIN_MEMBERS_FOR_FACET_PAGE))}</p>'
+                f"<table><thead><tr><th>{esc(heading)}</th>"
+                f"<th>{esc(t(locale, 'col_repositories'))}</th></tr></thead>"
+                f"<tbody>{rows}</tbody></table>",
                 data["generated_at"],
+                nav_key=kind,
             ),
         )
         for value in counts:
             members = [
                 record
                 for record in data["records"]
-                if (value in record["topics"] if kind == "topics" else record.get("language") == value)
+                if (value in record["topics"] if kind == "topics"
+                    else record.get("language") == value)
             ]
-            listing = "".join(repo_card(record) for record in members[:200])
+            listing = "".join(repo_card(locale, record) for record in members[:200])
+            path = f"/{kind}/{slug(value)}/"
             write(
-                [kind, slug(value)],
+                locale,
+                path,
                 page(
-                    f"{value} repositories",
-                    f"Tracked GitHub repositories for {value}.",
-                    f"/{kind}/{slug(value)}/",
-                    f"<h2>{esc(value)}</h2>{listing}",
+                    locale,
+                    t(locale, "facet_page_title", value=value),
+                    t(locale, "facet_page_desc", value=value),
+                    path,
+                    f"<h1>{esc(value)}</h1>"
+                    f'<p class="lede">{esc(t(locale, "facet_members", count=len(members)))}</p>'
+                    f"{listing}",
                     data["generated_at"],
+                    nav_key=kind,
                 ),
             )
 
 
-def render_home(data):
-    week = data["trending"][7][:30]
-    listing = "".join(repo_card(record) for record in week)
-    if not listing:
-        listing = "".join(repo_card(record) for record in data["records"][:30])
-    search = """<input type="search" id="q" placeholder="Filter tracked repositories..." autocomplete="off">
-<div id="results"></div>
+def render_home(locale, data):
+    ranked = data["trending"][7][:30] or data["records"][:30]
+    listing = "".join(
+        repo_card(locale, record, rank=index)
+        for index, record in enumerate(ranked, 1)
+    )
+    search = f"""<label for="q" style="display:block;font-size:14px;color:var(--muted);margin-bottom:var(--s2)">{esc(t(locale, 'search_label'))}</label>
+<input type="search" id="q" placeholder="{esc(t(locale, 'search_placeholder'))}" autocomplete="off">
+<div id="results" aria-live="polite"></div>
 <script>
 const box=document.getElementById('q'),out=document.getElementById('results');
-let index=null;
-const esc=s=>s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-box.addEventListener('input',async()=>{
+const NONE={json.dumps(t(locale, 'search_none'))},STARS={json.dumps(t(locale, 'stars'))},ROOT={json.dumps(root(locale))};
+let index=null,timer;
+const esc=s=>s.replace(/[&<>"]/g,c=>({{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}}[c]));
+const compact=n=>n>=1000?(n/1000).toFixed(1).replace(/\\.0$/,'')+'k':n;
+box.addEventListener('input',()=>{{clearTimeout(timer);timer=setTimeout(run,150)}});
+async function run(){{
   const term=box.value.trim().toLowerCase();
-  if(term.length<2){out.innerHTML='';return}
-  if(!index){index=await(await fetch('BASE_PATH/data/index.json')).json()}
+  if(term.length<2){{out.innerHTML='';return}}
+  if(!index){{index=await(await fetch({json.dumps(BASE)}+'/data/index.json')).json()}}
   const hits=index.filter(r=>r.n.toLowerCase().includes(term)||(r.d||'').toLowerCase().includes(term)).slice(0,50);
-  out.innerHTML=hits.map(r=>`<div class="repo"><div class="repo-name"><a href="BASE_PATH/repo/${r.n.split('/').map(encodeURIComponent).join('/')}/">${esc(r.n)}</a></div><p class="repo-desc">${esc(r.d||'')}</p><div class="meta"><span>${r.s.toLocaleString()} stars</span></div></div>`).join('')||'<p class="empty">No matches.</p>';
-});
-</script>""".replace("BASE_PATH", BASE)
-    body = f"""<h2>Search</h2>{search}
-<h2>Rising this week</h2>{listing}"""
+  out.innerHTML=hits.length?hits.map(r=>{{
+    const [owner,...rest]=r.n.split('/');
+    return `<article class="card"><div><h3 class="card-title"><a href="${{ROOT}}/repo/${{r.n.split('/').map(encodeURIComponent).join('/')}}/"><span class="owner">${{esc(owner)}}/</span>${{esc(rest.join('/'))}}</a></h3><p class="card-desc">${{esc(r.d||'')}}</p><div class="card-meta"><span>${{compact(r.s)}} ${{STARS}}</span></div></div></article>`;
+  }}).join(''):`<p class="mom-sub" style="font-size:15px">${{NONE}}</p>`;
+}}
+</script>"""
+    diagnostics = data["diagnostics"]
+    body = f"""<h1>{esc(t(locale, 'home_h1'))}</h1>
+<p class="lede">{esc(t(locale, 'home_lede', tracked=f"{diagnostics['total_repos']:,}", published=f"{diagnostics['published']:,}"))}</p>
+{search}
+<h2>{esc(t(locale, 'rising'))}</h2>
+{history_notice(locale, data)}
+{listing}"""
     write(
-        [],
+        locale,
+        "/",
         page(
-            "gitpulse — GitHub repositories, ranked by momentum",
-            "Daily star snapshots across GitHub, turned into real 1d/7d/30d growth "
-            "rates. Only substantive repositories get a page.",
+            locale,
+            t(locale, "home_title"),
+            t(locale, "home_desc"),
             "/",
             body,
             data["generated_at"],
@@ -267,49 +445,41 @@ box.addEventListener('input',async()=>{
     )
 
 
-def render_methodology(data):
+def render_methodology(locale, data):
     diagnostics = data["diagnostics"]
-    body = f"""<h2>Methodology</h2>
-<p>Every figure comes from GitHub's public API. Nothing is invented, and there
-are no editorial ratings.</p>
-<h2>What gets tracked</h2>
-<p>Repositories at or above <strong>{prepare_data.PAGE_MIN_STARS:,}</strong> stars get a page.
-Repositories from <strong>{2000:,}</strong> stars upward are tracked in the dataset without a
-page, so a smaller project that starts accelerating can be promoted. Currently
-{diagnostics['total_repos']:,} tracked, {diagnostics['published']:,} published.</p>
-<h2>How velocity is computed</h2>
-<p>Star counts are snapshotted once a day. GitHub exposes only the current
-count, so history has to be accumulated and cannot be backfilled.</p>
-<p>A window compares the current count against the most recent snapshot on or
-before that many days ago. If the nearest available snapshot is more than
-{prepare_data.STALENESS_TOLERANCE} days staler than the target, no figure is published for that window
-rather than a mislabelled one. A repository without enough history shows no
-velocity at all, never zero.</p>
-<h2>Ranking</h2>
-<p>Trending pages rank by percentage growth, but only for repositories that
-also gained at least <strong>{prepare_data.MIN_ABS_DELTA}</strong> stars in the window. Percentage alone
-favours tiny absolute moves on small repositories.</p>
-<h2>Publishing thresholds</h2>
-<p>A repository gets a page when it is not archived, has a description, was
-pushed within {prepare_data.ACTIVE_DAYS} days, and either passes the star threshold above or gained
-at least {prepare_data.MIN_VELOCITY_PCT}% over 7 days. Topic and language pages need at least
-{prepare_data.MIN_MEMBERS_FOR_FACET_PAGE} members.</p>
-<p>{diagnostics['with_velocity']:,} published repositories currently have enough
-history for a 7-day figure.</p>"""
+    body = f"""<h1>{esc(t(locale, 'methodology_h1'))}</h1>
+<p class="lede">{esc(t(locale, 'methodology_lede'))}</p>
+<h2>{esc(t(locale, 'm_tracked_h'))}</h2>
+<p>{t(locale, 'm_tracked_p', gate=f"{prepare_data.PAGE_MIN_STARS:,}", floor="2,000", tracked=f"{diagnostics['total_repos']:,}", published=f"{diagnostics['published']:,}")}</p>
+<h2>{esc(t(locale, 'm_velocity_h'))}</h2>
+<p>{esc(t(locale, 'm_velocity_p1'))}</p>
+<p>{esc(t(locale, 'm_velocity_p2', tolerance=prepare_data.STALENESS_TOLERANCE))}</p>
+<h2>{esc(t(locale, 'm_rank_h'))}</h2>
+<p>{t(locale, 'm_rank_p', delta=prepare_data.MIN_ABS_DELTA)}</p>
+<h2>{esc(t(locale, 'm_gate_h'))}</h2>
+<p>{esc(t(locale, 'm_gate_p', days=prepare_data.ACTIVE_DAYS, pct=prepare_data.MIN_VELOCITY_PCT, members=prepare_data.MIN_MEMBERS_FOR_FACET_PAGE))}</p>
+<p>{esc(t(locale, 'm_stat_p', count=f"{diagnostics['with_velocity']:,}"))}</p>"""
     write(
-        ["methodology"],
+        locale,
+        "/methodology/",
         page(
-            "Methodology — gitpulse",
-            "How repositories are tracked, ranked and published.",
+            locale,
+            t(locale, "methodology_title"),
+            t(locale, "methodology_desc"),
             "/methodology/",
             body,
             data["generated_at"],
+            nav_key="methodology",
         ),
     )
 
 
 def render_search_index(data):
-    """Slim index for client-side filtering: short keys keep the payload small."""
+    """Slim index for client-side filtering, shared by every locale.
+
+    Repository names and descriptions are not translated, so one file serves all
+    locales rather than three identical copies.
+    """
     index = [
         {
             "n": record["full_name"],
@@ -327,13 +497,14 @@ def render_search_index(data):
 def build():
     data = prepare_data.build()
     SITE_DIR.mkdir(parents=True, exist_ok=True)
-    render_home(data)
-    render_trending(data)
-    render_repo_pages(data)
-    render_facets(data)
-    render_methodology(data)
-    index_bytes = render_search_index(data)
-    data["diagnostics"]["search_index_bytes"] = index_bytes
+    for locale in LOCALES:
+        render_home(locale, data)
+        render_trending(locale, data)
+        render_repo_pages(locale, data)
+        render_facets(locale, data)
+        render_methodology(locale, data)
+    data["diagnostics"]["search_index_bytes"] = render_search_index(data)
+    data["diagnostics"]["locales"] = len(LOCALES)
     return data
 
 

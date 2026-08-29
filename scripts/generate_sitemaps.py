@@ -12,7 +12,8 @@ entirely.
 import pathlib
 import xml.etree.ElementTree as ET
 
-from render_site import BASE, ORIGIN, slug
+from render_site import BASE, ORIGIN, repo_path, root, slug
+from i18n import LOCALES
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 SITE_DIR = ROOT / "site"
@@ -37,17 +38,19 @@ THROTTLED_BOTS = (
 
 
 def absolute(path):
+    """path already carries its locale prefix; see collect()."""
     return f"{ORIGIN}{BASE}{path}"
 
 
 def urlset(entries):
-    root = ET.Element("urlset", xmlns=NAMESPACE)
+    # Named element, not "root": that name belongs to the imported locale helper.
+    element = ET.Element("urlset", xmlns=NAMESPACE)
     for path, lastmod in entries:
-        node = ET.SubElement(root, "url")
+        node = ET.SubElement(element, "url")
         ET.SubElement(node, "loc").text = absolute(path)
         if lastmod:
             ET.SubElement(node, "lastmod").text = lastmod
-    return ET.ElementTree(root)
+    return ET.ElementTree(element)
 
 
 def write_tree(tree, *parts):
@@ -59,18 +62,23 @@ def write_tree(tree, *parts):
 
 
 def collect(data):
-    """Every published URL, grouped the way the sitemap index shards them."""
-    core = [("/", None), ("/methodology/", None), ("/topics/", None), ("/languages/", None)]
+    """Every published URL in every locale, grouped the way the index shards them.
 
-    rankings = [(f"/trending/{name}/", None) for name, _ in
-                (("day", 1), ("week", 7), ("month", 30))]
-    rankings += [(f"/topics/{slug(value)}/", None) for value in data["topics"]]
-    rankings += [(f"/languages/{slug(value)}/", None) for value in data["languages"]]
-
-    repos = []
-    for record in data["records"]:
-        owner, name = record["full_name"].split("/", 1)
-        repos.append((f"/repo/{slug(owner)}/{slug(name)}/", record.get("pushed_at")))
+    Derived from the same gate and locale list that produced the pages, so the
+    two cannot drift apart.
+    """
+    core, rankings, repos = [], [], []
+    for locale in LOCALES:
+        prefix = root(locale).removeprefix(BASE)
+        core += [(f"{prefix}/", None), (f"{prefix}/methodology/", None),
+                 (f"{prefix}/topics/", None), (f"{prefix}/languages/", None)]
+        rankings += [(f"{prefix}/trending/{name}/", None)
+                     for name in ("day", "week", "month")]
+        rankings += [(f"{prefix}/topics/{slug(value)}/", None) for value in data["topics"]]
+        rankings += [(f"{prefix}/languages/{slug(value)}/", None)
+                     for value in data["languages"]]
+        repos += [(f"{prefix}{repo_path(record['full_name'])}", record.get("pushed_at"))
+                  for record in data["records"]]
 
     return {"core": core, "rankings": rankings, "repos": repos}
 

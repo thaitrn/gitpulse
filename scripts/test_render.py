@@ -19,6 +19,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import generate_sitemaps
 import prepare_data
 import render_site
+from i18n import LOCALES, LOCALE_TAGS
 
 # Repos chosen to exercise the awkward cases: a dot in the name, a quote and a
 # script tag in a description, unicode, and a repo below the star gate that is
@@ -113,9 +114,66 @@ def test_deep_link_is_a_real_index_html():
     """Static hosts serve <path>/index.html; a bare file would 404 on deep link."""
     with tempfile.TemporaryDirectory() as tmp:
         _data, site_dir = build_into(tmp)
-        target = site_dir / "repo" / "dotted" / "some.thing.js" / "index.html"
-        assert target.exists(), "dotted repo name did not produce a page"
-        print("  ok: repo name containing dots resolves to index.html")
+        for locale in LOCALES:
+            base = site_dir if locale == LOCALES[0] else site_dir / locale
+            target = base / "repo" / "dotted" / "some.thing.js" / "index.html"
+            assert target.exists(), f"{locale}: dotted repo name did not produce a page"
+        print("  ok: dotted repo name resolves to index.html in every locale")
+
+
+def test_titles_are_unique_within_each_locale():
+    """Titles repeat across translations by design, but never inside one locale."""
+    with tempfile.TemporaryDirectory() as tmp:
+        _data, site_dir = build_into(tmp)
+        for locale in LOCALES:
+            base = site_dir if locale == LOCALES[0] else site_dir / locale
+            paths = [
+                path for path in base.rglob("index.html")
+                if locale != LOCALES[0]
+                or not any(part in LOCALES[1:] for part in path.parts)
+            ]
+            titles = [
+                re.search(r"<title>(.*?)</title>", path.read_text(), re.S).group(1)
+                for path in paths
+            ]
+            duplicates = {title for title in titles if titles.count(title) > 1}
+            assert not duplicates, f"{locale}: duplicate titles {duplicates}"
+        print("  ok: titles unique within each locale")
+
+
+def test_hreflang_covers_every_locale_and_x_default():
+    """Without these, the translations read as duplicate content."""
+    with tempfile.TemporaryDirectory() as tmp:
+        _data, site_dir = build_into(tmp)
+        markup = (site_dir / "index.html").read_text()
+        for locale in LOCALES:
+            tag = LOCALE_TAGS[locale]
+            assert f'hreflang="{tag}"' in markup, f"missing hreflang for {tag}"
+        assert 'hreflang="x-default"' in markup
+        print("  ok: hreflang alternates present for all locales plus x-default")
+
+
+def test_lang_attribute_matches_locale():
+    with tempfile.TemporaryDirectory() as tmp:
+        _data, site_dir = build_into(tmp)
+        for locale in LOCALES:
+            base = site_dir if locale == LOCALES[0] else site_dir / locale
+            markup = (base / "index.html").read_text()
+            assert f'<html lang="{LOCALE_TAGS[locale]}"' in markup, locale
+        print("  ok: html lang attribute matches each locale")
+
+
+def test_translated_chrome_actually_differs():
+    """Guards against a locale silently falling back to English everywhere."""
+    with tempfile.TemporaryDirectory() as tmp:
+        _data, site_dir = build_into(tmp)
+        english = (site_dir / "index.html").read_text()
+        for locale in LOCALES[1:]:
+            markup = (site_dir / locale / "index.html").read_text()
+            english_h1 = re.search(r"<h1>(.*?)</h1>", english, re.S).group(1)
+            other_h1 = re.search(r"<h1>(.*?)</h1>", markup, re.S).group(1)
+            assert other_h1 != english_h1, f"{locale} h1 was not translated"
+        print("  ok: each locale renders translated chrome")
 
 
 def test_crawled_text_is_escaped():
@@ -154,18 +212,6 @@ def test_velocity_branch_promotes_only_the_riser():
         print("  ok: velocity branch promotes the riser, not the flat repo")
 
 
-def test_titles_are_unique():
-    with tempfile.TemporaryDirectory() as tmp:
-        _data, site_dir = build_into(tmp)
-        titles = [
-            re.search(r"<title>(.*?)</title>", path.read_text(), re.S).group(1)
-            for path in site_dir.rglob("index.html")
-        ]
-        duplicates = {title for title in titles if titles.count(title) > 1}
-        assert not duplicates, f"duplicate titles: {duplicates}"
-        print(f"  ok: {len(titles)} pages, all titles unique")
-
-
 def test_canonical_matches_actual_path():
     with tempfile.TemporaryDirectory() as tmp:
         _data, site_dir = build_into(tmp)
@@ -194,10 +240,13 @@ if __name__ == "__main__":
     for check in [
         test_every_sitemap_url_has_a_file,
         test_deep_link_is_a_real_index_html,
+        test_titles_are_unique_within_each_locale,
+        test_hreflang_covers_every_locale_and_x_default,
+        test_lang_attribute_matches_locale,
+        test_translated_chrome_actually_differs,
         test_crawled_text_is_escaped,
         test_json_ld_is_valid_json_and_cannot_break_out,
         test_velocity_branch_promotes_only_the_riser,
-        test_titles_are_unique,
         test_canonical_matches_actual_path,
         test_robots_lists_sitemap_and_throttles_bots,
     ]:

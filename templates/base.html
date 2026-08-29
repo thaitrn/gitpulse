@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="$lang">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -11,55 +11,182 @@
 <meta property="og:type" content="website">
 <meta property="og:url" content="$canonical">
 <meta name="twitter:card" content="summary">
+$alternates
 <style>
-:root{--bg:#fff;--fg:#1a1a1a;--muted:#666;--line:#e3e3e3;--accent:#0b5;--link:#0645ad}
-@media(prefers-color-scheme:dark){:root{--bg:#151515;--fg:#e8e8e8;--muted:#999;--line:#2e2e2e;--accent:#2d8;--link:#7ab7ff}}
+/* Design tokens. Light and dark are authored as separate palettes rather than
+   inverted values, so contrast is verified per theme instead of assumed. */
+:root{
+  --bg:#ffffff; --surface:#f7f8fa; --fg:#16181d; --muted:#5c6370;
+  --line:#e4e7eb; --line-strong:#d2d7dd;
+  --up:#0a7c42; --up-bg:#e8f5ee; --down:#9a3412; --down-bg:#fdeee7;
+  --link:#0b56c4; --focus:#0b56c4;
+  /* 4px spacing rhythm */
+  --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:24px; --s6:32px; --s7:48px;
+  --radius:8px;
+}
+@media(prefers-color-scheme:dark){
+  :root{
+    --bg:#0d1117; --surface:#161b22; --fg:#e6edf3; --muted:#8b949e;
+    --line:#21262d; --line-strong:#30363d;
+    --up:#3fb950; --up-bg:#0f2a17; --down:#f0883e; --down-bg:#2b1a0f;
+    --link:#6cb6ff; --focus:#6cb6ff;
+  }
+}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
-a{color:var(--link)}
-header,main,footer{max-width:64rem;margin:0 auto;padding:0 1rem}
-header{display:flex;gap:1rem;align-items:baseline;flex-wrap:wrap;padding-top:1.2rem;padding-bottom:.6rem;border-bottom:1px solid var(--line)}
-header h1{font-size:1.1rem;margin:0}
-header nav{display:flex;gap:.9rem;flex-wrap:wrap}
-header nav a{text-decoration:none;color:var(--muted)}
-header nav a:hover{color:var(--fg)}
-main{padding-top:1.4rem;padding-bottom:2rem}
-h2{font-size:1.25rem;margin:1.6rem 0 .6rem}
-.repo{padding:.75rem 0;border-bottom:1px solid var(--line)}
-.repo-name{font-weight:600;font-size:1rem}
-.repo-desc{color:var(--fg);margin:.25rem 0}
-.meta{color:var(--muted);font-size:.85rem;display:flex;gap:.9rem;flex-wrap:wrap}
-.up{color:var(--accent);font-weight:600}
-.down{color:var(--muted)}
-.tags a{display:inline-block;margin:.15rem .3rem .15rem 0;padding:.05rem .45rem;border:1px solid var(--line);border-radius:.75rem;font-size:.78rem;text-decoration:none;color:var(--muted)}
-input[type=search]{width:100%;padding:.55rem .7rem;font-size:1rem;border:1px solid var(--line);border-radius:.35rem;background:var(--bg);color:var(--fg)}
-table{border-collapse:collapse;width:100%}
-td,th{text-align:left;padding:.3rem .6rem .3rem 0;border-bottom:1px solid var(--line)}
-footer{color:var(--muted);font-size:.85rem;border-top:1px solid var(--line);padding-top:.8rem;padding-bottom:2rem}
-.spark{display:block;margin:.5rem 0}
-.empty{color:var(--muted);font-style:italic}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;background:var(--bg);color:var(--fg);
+  font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  /* Every figure on this site sits in a column that must not jitter as digits change. */
+  font-variant-numeric:tabular-nums;
+}
+a{color:var(--link);text-decoration-thickness:1px;text-underline-offset:2px}
+a:hover{text-decoration-thickness:2px}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px;border-radius:3px}
+
+.skip{position:absolute;left:-9999px}
+.skip:focus{left:var(--s4);top:var(--s2);z-index:10;padding:var(--s2) var(--s3);
+  background:var(--bg);border:1px solid var(--line-strong);border-radius:var(--radius)}
+
+.wrap{max-width:60rem;margin:0 auto;padding:0 var(--s4)}
+
+header{border-bottom:1px solid var(--line);background:var(--bg)}
+.head-inner{display:flex;gap:var(--s5);align-items:center;flex-wrap:wrap;
+  padding-top:var(--s4);padding-bottom:var(--s4)}
+.brand{font-size:17px;font-weight:650;letter-spacing:-.01em;text-decoration:none;color:inherit;
+  display:inline-flex;align-items:center;gap:var(--s2)}
+.brand .dot{width:9px;height:9px;border-radius:50%;background:var(--up);flex:none}
+nav{display:flex;gap:var(--s1);flex-wrap:wrap;margin-left:auto}
+nav a{
+  font-size:14px;text-decoration:none;color:var(--muted);
+  /* 44px min touch target via padding, not a fixed height that breaks wrapping. */
+  padding:var(--s3) var(--s3);border-radius:6px;transition:background .15s,color .15s;
+}
+nav a:hover{color:var(--fg);background:var(--surface)}
+nav a[aria-current=page]{color:var(--fg);font-weight:600;background:var(--surface)}
+.langs{display:flex;gap:2px;align-items:center;border:1px solid var(--line-strong);
+  border-radius:6px;padding:2px;margin-left:var(--s2)}
+.langs a{font-size:13px;padding:var(--s2) var(--s3);border-radius:4px;text-decoration:none;
+  color:var(--muted);line-height:1}
+.langs a:hover{color:var(--fg);background:var(--surface)}
+.langs a[aria-current=true]{color:var(--fg);background:var(--surface);font-weight:600}
+
+main{padding-top:var(--s6);padding-bottom:var(--s7)}
+h1{font-size:28px;line-height:1.25;letter-spacing:-.02em;margin:0 0 var(--s2);font-weight:680}
+h2{font-size:21px;line-height:1.3;letter-spacing:-.01em;margin:var(--s7) 0 var(--s4);font-weight:650}
+h2:first-child{margin-top:0}
+.lede{color:var(--muted);font-size:17px;margin:0 0 var(--s6);max-width:46rem}
+p{max-width:46rem}
+
+/* ---- repo card: rank, identity, momentum ---- */
+.card{
+  display:grid;grid-template-columns:1fr auto;gap:var(--s4);
+  padding:var(--s4) 0;border-bottom:1px solid var(--line);align-items:start;
+}
+.card-rank{
+  grid-row:span 2;font-size:13px;color:var(--muted);font-weight:600;
+  min-width:2ch;padding-top:3px;
+}
+.card:has(.card-rank){grid-template-columns:auto 1fr auto}
+.card-title{font-size:17px;line-height:1.35;margin:0 0 var(--s1);font-weight:600}
+.card-title a{text-decoration:none}
+.card-title a:hover{text-decoration:underline}
+.card-title .owner{color:var(--muted);font-weight:450}
+.card-desc{margin:0 0 var(--s2);color:var(--fg);font-size:15px;line-height:1.5;
+  max-width:44rem}
+.card-meta{display:flex;gap:var(--s4);flex-wrap:wrap;color:var(--muted);font-size:13.5px}
+.card-meta a{color:var(--muted)}
+
+/* Momentum block: the product's differentiator, so it gets the largest number
+   on the card and its own column rather than trailing the metadata row. */
+.momentum{text-align:right;min-width:8.5rem}
+.mom-value{
+  display:inline-flex;align-items:center;gap:var(--s1);
+  font-size:19px;font-weight:670;letter-spacing:-.01em;line-height:1.2;
+  padding:var(--s1) var(--s2);border-radius:6px;
+}
+.mom-value svg{flex:none}
+.mom-up{color:var(--up);background:var(--up-bg)}
+.mom-down{color:var(--down);background:var(--down-bg)}
+.mom-none{color:var(--muted);font-weight:500;font-size:15px}
+.mom-sub{display:block;color:var(--muted);font-size:12.5px;margin-top:var(--s1)}
+
+.tags{margin-top:var(--s2);display:flex;flex-wrap:wrap;gap:var(--s1)}
+.tags a{
+  font-size:12.5px;text-decoration:none;color:var(--muted);
+  padding:3px var(--s2);border:1px solid var(--line-strong);border-radius:999px;
+  transition:border-color .15s,color .15s;
+}
+.tags a:hover{color:var(--fg);border-color:var(--fg)}
+
+/* ---- notice / empty states ---- */
+.notice{
+  background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--muted);
+  border-radius:var(--radius);padding:var(--s4);margin:0 0 var(--s5);
+}
+.notice h3{margin:0 0 var(--s1);font-size:15px;font-weight:650}
+.notice p{margin:0;color:var(--muted);font-size:14.5px;max-width:44rem}
+
+/* ---- stat tiles: used instead of a chart below 4 data points ---- */
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(9rem,1fr));gap:var(--s3);
+  margin:var(--s4) 0}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+  padding:var(--s3) var(--s4)}
+.stat-label{display:block;color:var(--muted);font-size:12.5px;text-transform:uppercase;
+  letter-spacing:.04em;margin-bottom:var(--s1)}
+.stat-value{font-size:21px;font-weight:660;letter-spacing:-.01em}
+
+.spark{display:block;margin:var(--s3) 0;color:var(--up)}
+
+input[type=search]{
+  width:100%;max-width:34rem;padding:var(--s3) var(--s4);font-size:16px;
+  border:1px solid var(--line-strong);border-radius:var(--radius);
+  background:var(--bg);color:var(--fg);
+}
+input[type=search]::placeholder{color:var(--muted)}
+
+table{border-collapse:collapse;width:100%;font-size:15px}
+th{text-align:left;font-weight:600;color:var(--muted);font-size:12.5px;
+  text-transform:uppercase;letter-spacing:.04em}
+td,th{padding:var(--s3) var(--s4) var(--s3) 0;border-bottom:1px solid var(--line)}
+
+footer{border-top:1px solid var(--line);color:var(--muted);font-size:14px;
+  padding-top:var(--s5);padding-bottom:var(--s6)}
+footer p{margin:0 0 var(--s2)}
+
+@media(max-width:640px){
+  main{padding-top:var(--s5)}
+  h1{font-size:24px}
+  h2{font-size:19px;margin-top:var(--s6)}
+  /* Momentum drops below the identity block rather than squeezing it. */
+  .card,.card:has(.card-rank){grid-template-columns:1fr}
+  .card-rank{grid-row:auto}
+  .momentum{text-align:left}
+  nav{margin-left:0}
+  .langs{margin-left:0}
+}
+@media(prefers-reduced-motion:reduce){
+  *{transition:none!important;animation:none!important}
+}
 </style>
 $head_extra
 </head>
 <body>
+<a class="skip" href="#main">$skip_label</a>
 <header>
-<h1><a href="$base/" style="text-decoration:none;color:inherit">gitpulse</a></h1>
-<nav>
-<a href="$base/trending/day/">Today</a>
-<a href="$base/trending/week/">Week</a>
-<a href="$base/trending/month/">Month</a>
-<a href="$base/topics/">Topics</a>
-<a href="$base/languages/">Languages</a>
-<a href="$base/methodology/">Methodology</a>
-</nav>
+<div class="wrap head-inner">
+<a class="brand" href="$home_href"><span class="dot" aria-hidden="true"></span>gitpulse</a>
+$nav
+$lang_switcher
+</div>
 </header>
-<main>
+<main id="main" class="wrap">
 $body
 </main>
-<footer>
-<p>Repository data from the GitHub API. $generated_note</p>
-<p><a href="$base/methodology/">How ranking works</a> &middot;
-<a href="https://github.com/thaitrn/gitpulse">Source</a></p>
+<footer class="wrap">
+<p>$footer_data</p>
+<p><a href="$methodology_href">$footer_how</a> &middot;
+<a href="https://github.com/thaitrn/gitpulse">$footer_source</a></p>
 </footer>
 </body>
 </html>
