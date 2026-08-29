@@ -50,4 +50,21 @@ jobs:
           git add data/
           git diff --staged --quiet && echo "no changes" && exit 0
           git commit -m "data: snapshot $(date -u +%Y-%m-%d) [skip ci]"
-          git push
+
+          # This job checks out main, then runs for ~35 minutes. Any push during
+          # that window leaves the remote ahead, and a plain `git push` is
+          # rejected — discarding a snapshot that cannot be recomputed, because
+          # GitHub only ever reports a repository's *current* star count.
+          # Rebase onto whatever landed meanwhile and retry: the job only ever
+          # touches data/, so it cannot conflict with code pushed elsewhere, and
+          # the concurrency group rules out a second crawl racing this one.
+          for attempt in 1 2 3; do
+            if git push; then
+              echo "pushed on attempt $attempt"
+              exit 0
+            fi
+            echo "push rejected, rebasing onto origin/main (attempt $attempt)"
+            git pull --rebase origin main
+          done
+          echo "::error::could not push snapshot after 3 attempts"
+          exit 1
