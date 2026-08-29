@@ -17,7 +17,12 @@ concurrency:
 jobs:
   crawl:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # Measured 2026-08-29: a 100-node page with topics takes ~5s server-side
+    # (~2.8s without topics), and a full crawl needs ~330 pages plus range
+    # probes, so a run lands around 40 minutes. Public-repo minutes are free and
+    # this is a nightly job, so the runtime is not worth optimising away; the
+    # timeout just has to be honest about it.
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
 
