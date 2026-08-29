@@ -223,6 +223,46 @@ def test_no_broken_plural_in_any_locale():
         print("  ok: no broken plural in any locale")
 
 
+def test_avatar_tile_is_deterministic_and_decorative():
+    first = render_site.avatar_tile("codecrafters-io")
+    assert first == render_site.avatar_tile("codecrafters-io"), "colour not stable"
+    assert 'aria-hidden="true"' in first, "decorative tile exposed to screen readers"
+    assert ">C</div>" in first, first
+    assert render_site.avatar_tile("other-owner") != first, "all owners same colour"
+    print("  ok: avatar tile stable per owner, decorative, distinct across owners")
+
+
+def test_avatar_tile_cannot_inject_css():
+    """Only a derived integer reaches the style attribute."""
+    hostile = 'x";background:url(javascript:alert(1));"'
+    markup = render_site.avatar_tile(hostile)
+    assert "javascript:" not in markup, markup
+    assert "url(" not in markup, markup
+    assert re.search(r"background:hsl\(\d{1,3} 45% var\(--tile-l\)\)", markup), markup
+    print("  ok: hostile owner name cannot reach the style attribute")
+
+
+def test_cross_window_badge_excludes_current_window():
+    with tempfile.TemporaryDirectory() as tmp:
+        data, _site_dir = build_into(tmp)
+        record = data["trending"][7][0]
+        names = render_site.other_windows(record, data, 7)
+        assert "week" not in names, "badge named the window being viewed"
+        assert names, "expected the top weekly repo to rank in another window too"
+        print(f"  ok: cross-window badge lists {names}, never the current window")
+
+
+def test_cross_window_badge_renders_translated():
+    with tempfile.TemporaryDirectory() as tmp:
+        data, site_dir = build_into(tmp)
+        for locale in LOCALES:
+            base = site_dir if locale == LOCALES[0] else site_dir / locale
+            markup = (base / "trending" / "week" / "index.html").read_text()
+            assert 'class="badge-window"' in markup, f"{locale}: no badge rendered"
+            assert render_site.esc(render_site.t(locale, "also_day")) in markup, locale
+        print("  ok: cross-window badge present and translated in every locale")
+
+
 def test_truncated_list_states_shown_of_total():
     with tempfile.TemporaryDirectory() as tmp:
         _data, site_dir = build_into(tmp)
@@ -385,6 +425,10 @@ if __name__ == "__main__":
         test_page_never_claims_growth_ranking_it_did_not_do,
         test_ranking_source_reports_what_it_returns,
         test_no_broken_plural_in_any_locale,
+        test_avatar_tile_is_deterministic_and_decorative,
+        test_avatar_tile_cannot_inject_css,
+        test_cross_window_badge_excludes_current_window,
+        test_cross_window_badge_renders_translated,
         test_truncated_list_states_shown_of_total,
         test_complete_list_says_nothing,
         test_truncation_note_present_in_every_locale,

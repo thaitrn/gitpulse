@@ -180,7 +180,38 @@ def momentum(locale, record, window=7):
             f'<span class="mom-sub">{delta:+,} &middot; {window}d</span></div>')
 
 
-def repo_card(locale, record, whitelist, window=7, rank=None):
+def avatar_tile(owner):
+    """Deterministic letter tile: same owner, same colour, everywhere, always.
+
+    Real avatar images would mean one request per row to a third-party host,
+    which this site does not make — and would leak visitor traffic and add
+    layout shift. Only a derived integer hue reaches the style attribute; the
+    owner string never does, so there is no CSS injection path.
+    """
+    initial = next((c for c in owner if c.isalnum()), "?").upper()
+    hue = sum(ord(c) for c in owner) % 360
+    return (f'<div class="card-avatar" aria-hidden="true" '
+            f'style="background:hsl({hue} 45% var(--tile-l))">{esc(initial)}</div>')
+
+
+def other_windows(record, data, current_window):
+    """Windows other than this one where the repo is also ranked.
+
+    A repo trending across several windows is a stronger signal than one
+    appearing in a single window. The data is already computed; this is a set
+    membership check, not a new query.
+    """
+    found = []
+    for window, name in WINDOWS.items():
+        if window == current_window:
+            continue
+        if any(row["full_name"] == record["full_name"]
+               for row in data["trending"][window][:TRENDING_CAP]):
+            found.append(name)
+    return found
+
+
+def repo_card(locale, record, whitelist, window=7, rank=None, data=None):
     owner, name = record["full_name"].split("/", 1)
     topics = "".join(
         f'<a href="{root(locale)}/topics/{slug(topic)}/">{esc(topic)}</a>'
@@ -194,8 +225,14 @@ def repo_card(locale, record, whitelist, window=7, rank=None):
         )
     if record.get("pushed_at"):
         meta.append(f"{esc(t(locale, 'pushed'))} {esc(record['pushed_at'])}")
+    if data is not None:
+        meta += [
+            f'<span class="badge-window">{esc(t(locale, f"also_{name}"))}</span>'
+            for name in other_windows(record, data, window)
+        ]
     rank_markup = f'<div class="card-rank">{rank}</div>' if rank else ""
     return f"""<article class="card">{rank_markup}
+{avatar_tile(owner)}
 <div>
 <h3 class="card-title"><a href="{root(locale)}{repo_path(record['full_name'])}"><span class="owner">{esc(owner)}/</span>{esc(name)}</a></h3>
 <p class="card-desc">{esc(record.get('description'))}</p>
@@ -372,7 +409,7 @@ def render_trending(locale, data):
         order, pool = ranking_source(data, window)
         ranked, total = limited(pool, TRENDING_CAP)
         listing = "".join(
-            repo_card(locale, record, data["topics"], window, rank=index)
+            repo_card(locale, record, data["topics"], window, rank=index, data=data)
             for index, record in enumerate(ranked, 1)
         )
         if order == "growth":
@@ -461,7 +498,7 @@ def render_home(locale, data):
     pool = data["trending"][7] or data["records"]
     ranked, _total = limited(pool, HOME_CAP)
     listing = "".join(
-        repo_card(locale, record, data["topics"], rank=index)
+        repo_card(locale, record, data["topics"], rank=index, data=data)
         for index, record in enumerate(ranked, 1)
     )
     selection = (f'<p class="mom-sub" style="font-size:14px;margin-bottom:var(--s4)">'

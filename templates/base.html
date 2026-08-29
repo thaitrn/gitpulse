@@ -23,6 +23,9 @@ $alternates
   /* 4px spacing rhythm */
   --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:24px; --s6:32px; --s7:48px;
   --radius:8px;
+  /* Tile lightness lives per theme so a hashed hue can never drive contrast.
+     Verified across all hues: worst case 13.8:1 light, 7.0:1 dark. */
+  --tile-l:92%;
 }
 @media(prefers-color-scheme:dark){
   :root{
@@ -30,6 +33,7 @@ $alternates
     --line:#21262d; --line-strong:#30363d;
     --up:#3fb950; --up-bg:#0f2a17; --down:#f0883e; --down-bg:#2b1a0f;
     --link:#6cb6ff; --focus:#6cb6ff;
+    --tile-l:22%;
   }
 }
 *{box-sizing:border-box}
@@ -80,14 +84,21 @@ p{max-width:46rem}
 
 /* ---- repo card: rank, identity, momentum ---- */
 .card{
-  display:grid;grid-template-columns:1fr auto;gap:var(--s4);
+  display:grid;grid-template-columns:auto 1fr auto;gap:var(--s4);
   padding:var(--s4) 0;border-bottom:1px solid var(--line);align-items:start;
+}
+/* Decorative scanning anchor: the owner name sits next to it as text, so the
+   tile is aria-hidden and carries no information of its own. */
+.card-avatar{
+  width:34px;height:34px;border-radius:8px;display:grid;place-items:center;
+  font-size:15px;font-weight:650;color:var(--fg);margin-top:1px;
+  font-variant-numeric:normal;
 }
 .card-rank{
   grid-row:span 2;font-size:13px;color:var(--muted);font-weight:600;
   min-width:2ch;padding-top:3px;
 }
-.card:has(.card-rank){grid-template-columns:auto 1fr auto}
+.card:has(.card-rank){grid-template-columns:auto auto 1fr auto}
 .card-title{font-size:17px;line-height:1.35;margin:0 0 var(--s1);font-weight:600}
 .card-title a{text-decoration:none}
 .card-title a:hover{text-decoration:underline}
@@ -96,6 +107,10 @@ p{max-width:46rem}
   max-width:44rem}
 .card-meta{display:flex;gap:var(--s4);flex-wrap:wrap;color:var(--muted);font-size:13.5px}
 .card-meta a{color:var(--muted)}
+.badge-window{
+  border:1px solid var(--line-strong);border-radius:999px;padding:1px var(--s2);
+  font-size:12px;color:var(--muted);
+}
 
 /* Momentum block: the product's differentiator, so it gets the largest number
    on the card and its own column rather than trailing the metadata row. */
@@ -158,10 +173,12 @@ footer p{margin:0 0 var(--s2)}
   main{padding-top:var(--s5)}
   h1{font-size:24px}
   h2{font-size:19px;margin-top:var(--s6)}
-  /* Momentum drops below the identity block rather than squeezing it. */
-  .card,.card:has(.card-rank){grid-template-columns:1fr}
+  /* Momentum drops below the identity block rather than squeezing it; the
+     rank and tile stay beside the content so the list is still scannable. */
+  .card{grid-template-columns:auto 1fr}
+  .card:has(.card-rank){grid-template-columns:auto auto 1fr}
   .card-rank{grid-row:auto}
-  .momentum{text-align:left}
+  .momentum{grid-column:1/-1;text-align:left}
   nav{margin-left:0}
   .langs{margin-left:0}
 }

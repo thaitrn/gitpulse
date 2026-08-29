@@ -65,6 +65,9 @@ STRINGS = {
                        "be backfilled. {have} of the 7 snapshots needed for a weekly figure "
                        "have been collected. Until then, listings are ordered by star count.",
         "no_history": "no history yet",
+        "also_day": "also today",
+        "also_week": "also this week",
+        "also_month": "also this month",
         "stars": "stars",
         "forks": "forks",
         "pushed": "pushed",
@@ -164,6 +167,9 @@ STRINGS = {
                        "từng ngày một và không thể bù ngược. Đã thu được {have}/7 ảnh chụp "
                        "cần thiết cho chỉ số tuần. Trong lúc chờ, danh sách xếp theo số sao.",
         "no_history": "chưa có lịch sử",
+        "also_day": "cả hôm nay",
+        "also_week": "cả tuần này",
+        "also_month": "cả tháng này",
         "stars": "sao",
         "forks": "fork",
         "pushed": "cập nhật",
@@ -253,6 +259,9 @@ STRINGS = {
         "notice_body": "GitHub 只提供仓库当前的星标数，因此增长率必须逐日累积，无法回溯补齐。"
                        "周度指标所需的 7 份快照目前已采集 {have} 份。在此之前，列表按星标数排序。",
         "no_history": "暂无历史",
+        "also_day": "今日同样上榜",
+        "also_week": "本周同样上榜",
+        "also_month": "本月同样上榜",
         "stars": "星标",
         "forks": "复刻",
         "pushed": "推送于",
