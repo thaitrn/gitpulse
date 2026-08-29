@@ -247,17 +247,44 @@ def repo_card(locale, record, whitelist, window=7, rank=None, data=None):
 </article>"""
 
 
-def history_notice(locale, data):
-    """One explanation per page, instead of repeating it on every row.
+def window_state(data, window):
+    """"accumulating" | "no_movers" | "ranked" for one window.
 
-    Empty states should say what is missing and when it arrives, not sit blank —
-    and repeating the same sentence on 30 cards is noise, not guidance.
+    Mirrors ranking_source(): the state and the sentence describing it come from
+    one value, so a page cannot say something the data does not support. The
+    windows fill at different times — 1-day needs two snapshots, 7-day needs
+    eight — so a single site-wide counter cannot speak for any of them.
     """
-    if data["diagnostics"]["with_velocity"]:
+    if not data["diagnostics"]["with_velocity_by_window"].get(window):
+        return "accumulating"
+    if not data["trending"][window]:
+        return "no_movers"
+    return "ranked"
+
+
+def snapshots_needed(window):
+    """Minimum daily snapshots before a window can produce a figure."""
+    return window + 1
+
+
+def window_state_notice(locale, data, window):
+    """The one message this window's page should carry, if any."""
+    state = window_state(data, window)
+    if state == "ranked":
         return ""
+    if state == "no_movers":
+        return fallback_notice(locale)
     return (f'<div class="notice"><h3>{esc(t(locale, "notice_title"))}</h3>'
-            f'<p>{esc(t(locale, "notice_body", have=data["diagnostics"]["snapshots_loaded"]))}'
+            f'<p>{esc(t(locale, "notice_body", have=data["diagnostics"]["snapshots_loaded"], need=snapshots_needed(window)))}'
             f"</p></div>")
+
+
+def history_notice(locale, data, window=7):
+    """Site-wide summary for pages that are not about one window.
+
+    The home page leads with the weekly ranking, so it speaks for that window.
+    """
+    return window_state_notice(locale, data, window)
 
 
 def sparkline(points, width=560, height=48):
@@ -416,15 +443,8 @@ def render_trending(locale, data):
             repo_card(locale, record, data["topics"], window, rank=index, data=data)
             for index, record in enumerate(ranked, 1)
         )
-        if order == "growth":
-            lede = t(locale, f"lede_{name}")
-            explanation = history_notice(locale, data)
-        else:
-            lede = t(locale, "lede_stars")
-            # Explain the substitution on the window that made it. The global
-            # "still accumulating" notice is keyed on the 7-day counter and
-            # cannot speak for a window that simply had no movers.
-            explanation = history_notice(locale, data) or fallback_notice(locale)
+        lede = t(locale, f"lede_{name}") if order == "growth" else t(locale, "lede_stars")
+        explanation = window_state_notice(locale, data, window)
         path = f"/trending/{name}/"
         write(
             locale,

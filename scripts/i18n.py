@@ -62,8 +62,8 @@ STRINGS = {
         "notice_title": "Momentum data is still accumulating",
         "notice_body": "GitHub only exposes a repository's current star count, so growth "
                        "rates have to be built up one daily snapshot at a time and cannot "
-                       "be backfilled. {have} of the 7 snapshots needed for a weekly figure "
-                       "have been collected. Until then, listings are ordered by star count.",
+                       "be backfilled. This window needs {need} daily snapshots and {have} "
+                       "have been collected, so this list is ordered by star count.",
         "no_history": "no history yet",
         "also_day": "also today",
         "also_week": "also this week",
@@ -164,8 +164,8 @@ STRINGS = {
 
         "notice_title": "Dữ liệu đà tăng đang được tích lũy",
         "notice_body": "GitHub chỉ cho biết số sao hiện tại, nên tốc độ tăng phải tích lũy "
-                       "từng ngày một và không thể bù ngược. Đã thu được {have}/7 ảnh chụp "
-                       "cần thiết cho chỉ số tuần. Trong lúc chờ, danh sách xếp theo số sao.",
+                       "từng ngày một và không thể bù ngược. Khung này cần {need} ảnh chụp "
+                       "hằng ngày, đã thu được {have}, nên danh sách xếp theo số sao.",
         "no_history": "chưa có lịch sử",
         "also_day": "cả hôm nay",
         "also_week": "cả tuần này",
@@ -257,7 +257,7 @@ STRINGS = {
 
         "notice_title": "增长数据仍在积累中",
         "notice_body": "GitHub 只提供仓库当前的星标数，因此增长率必须逐日累积，无法回溯补齐。"
-                       "周度指标所需的 7 份快照目前已采集 {have} 份。在此之前，列表按星标数排序。",
+                       "该时间窗口需要 {need} 份每日快照，目前已采集 {have} 份，因此此列表按星标数排序。",
         "no_history": "暂无历史",
         "also_day": "今日同样上榜",
         "also_week": "本周同样上榜",

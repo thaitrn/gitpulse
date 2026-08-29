@@ -295,6 +295,15 @@ def build():
             "with_velocity": sum(
                 1 for r in records if r.get("star_7d_pct") is not None
             ),
+            # Per window, because the windows fill at different times: 1-day needs
+            # two snapshots, 7-day needs eight. A single counter cannot describe
+            # what any given window's page is showing once they diverge.
+            "with_velocity_by_window": {
+                window: sum(
+                    1 for r in records if r.get(f"star_{window}d_pct") is not None
+                )
+                for window in WINDOWS
+            },
         },
     }
 

@@ -176,6 +176,74 @@ def test_translated_chrome_actually_differs():
         print("  ok: each locale renders translated chrome")
 
 
+def two_snapshot_data(tmp):
+    """The exact state the cron produces on day two: 1-day window live, 7-day not.
+
+    Neither existing fixture covered it — one has no history, the other has eight
+    days — which is why the windows were never seen diverging.
+    """
+    directory = pathlib.Path(tmp) / "data"
+    (directory / "snapshots").mkdir(parents=True)
+    repos = [
+        {"full_name": f"o/r{i}", "description": "d", "language": "Python",
+         "license": "MIT", "topics": ["cli"], "stars": 20_000 + i * 500, "forks": 5,
+         "created_at": "2024-01-01", "pushed_at": "2026-08-29",
+         "first_seen": "2026-08-29", "archived": False}
+        for i in range(10)
+    ]
+    (directory / "repos.jsonl").write_text(
+        "\n".join(json.dumps(r) for r in repos) + "\n"
+    )
+    for date, is_today in (("2026-08-29", 0), ("2026-08-30", 1)):
+        with gzip.open(directory / "snapshots" / f"{date}.jsonl.gz", "wt") as handle:
+            for repo in repos:
+                stars = repo["stars"] - (1 - is_today) * 300
+                handle.write(json.dumps({"r": repo["full_name"], "s": stars}) + "\n")
+    prepare_data.DATA_DIR = directory
+    return prepare_data.build()
+
+
+def test_populated_window_shows_no_accumulating_notice():
+    """The defect: a live 1-day page also said data was still accumulating."""
+    with tempfile.TemporaryDirectory() as tmp:
+        data = two_snapshot_data(tmp)
+        assert data["trending"][1], "fixture should populate the 1-day window"
+        assert not data["trending"][7], "fixture should leave the 7-day window empty"
+
+        order, _rows = render_site.ranking_source(data, 1)
+        assert order == "growth", order
+        notice = render_site.window_state_notice("en", data, 1)
+        assert notice == "", (
+            "1-day page ranks by growth yet still claims data is accumulating"
+        )
+        print("  ok: populated window carries no accumulating notice")
+
+
+def test_empty_window_states_its_own_snapshot_requirement():
+    """7 was hardcoded, so /trending/day and /month stated the wrong requirement."""
+    with tempfile.TemporaryDirectory() as tmp:
+        data = two_snapshot_data(tmp)
+        week = render_site.window_state_notice("en", data, 7)
+        month = render_site.window_state_notice("en", data, 30)
+        assert "8" in week, week
+        assert "31" in month, month
+        print("  ok: each empty window states its own snapshot requirement")
+
+
+def test_notice_and_growth_lede_never_co_occur():
+    with tempfile.TemporaryDirectory() as tmp:
+        data = two_snapshot_data(tmp)
+        render_site.SITE_DIR = pathlib.Path(tmp) / "site"
+        for locale in LOCALES:
+            render_site.render_trending(locale, data)
+        for name in ("day", "week", "month"):
+            markup = (render_site.SITE_DIR / "trending" / name / "index.html").read_text()
+            growth = render_site.esc(render_site.t("en", f"lede_{name}")) in markup
+            accumulating = render_site.esc(render_site.t("en", "notice_title")) in markup
+            assert not (growth and accumulating), f"/trending/{name} contradicts itself"
+        print("  ok: growth lede and accumulating notice never share a page")
+
+
 def test_page_never_claims_growth_ranking_it_did_not_do():
     """A window with no qualifying movers must say so, not mislabel star order.
 
@@ -431,6 +499,9 @@ if __name__ == "__main__":
         test_hreflang_covers_every_locale_and_x_default,
         test_lang_attribute_matches_locale,
         test_translated_chrome_actually_differs,
+        test_populated_window_shows_no_accumulating_notice,
+        test_empty_window_states_its_own_snapshot_requirement,
+        test_notice_and_growth_lede_never_co_occur,
         test_page_never_claims_growth_ranking_it_did_not_do,
         test_ranking_source_reports_what_it_returns,
         test_no_broken_plural_in_any_locale,
