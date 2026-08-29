@@ -381,6 +381,24 @@ def test_truncation_note_present_in_every_locale():
     print("  ok: truncation note translated in every locale")
 
 
+def test_home_uses_the_same_ranking_as_trending():
+    """The home page kept its own fallback and so kept showing the all-time list."""
+    with tempfile.TemporaryDirectory() as tmp:
+        data, site_dir = build_into(tmp)
+        data["trending"][7] = []
+        render_site.SITE_DIR = site_dir
+        render_site.render_home(LOCALES[0], data)
+        markup = (site_dir / "index.html").read_text()
+        _order, expected = render_site.ranking_source(data, 7)
+        top = expected[0]["full_name"]
+        by_stars = max(data["records"], key=lambda r: r["stars"])["full_name"]
+        assert render_site.esc(top) in markup, "home did not use ranking_source"
+        if top != by_stars:
+            body = markup.split('id="results"')[1]
+            assert body.index(render_site.esc(top)) < body.index(render_site.esc(by_stars))
+        print("  ok: home page ranks the same way the trending pages do")
+
+
 def test_fallback_orders_by_rate_not_total_stars():
     """Total stars on a trending page yields the all-time list, median age 7.6y."""
     with tempfile.TemporaryDirectory() as tmp:
@@ -562,6 +580,7 @@ if __name__ == "__main__":
         test_truncated_list_states_shown_of_total,
         test_complete_list_says_nothing,
         test_truncation_note_present_in_every_locale,
+        test_home_uses_the_same_ranking_as_trending,
         test_fallback_orders_by_rate_not_total_stars,
         test_repo_too_young_gets_no_rate,
         test_ranking_source_returns_full_pool_not_a_slice,

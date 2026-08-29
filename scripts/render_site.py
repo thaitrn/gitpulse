@@ -526,7 +526,11 @@ def render_facets(locale, data):
 
 
 def render_home(locale, data):
-    pool = data["trending"][7] or data["records"]
+    # Through ranking_source, not a second copy of the same fallback: the home
+    # page had its own `or data["records"]`, so it kept showing the all-time list
+    # after the trending pages stopped. Duplicated decision logic is what produced
+    # this defect class in the first place.
+    _order, pool = ranking_source(data, 7)
     ranked, _total = limited(pool, HOME_CAP)
     listing = "".join(
         repo_card(locale, record, data["topics"], rank=index, data=data)
