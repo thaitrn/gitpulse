@@ -120,7 +120,7 @@ def nav_markup(locale, current):
 def language_switcher(locale, path):
     """Links to the same page in every locale, not just to each locale's home."""
     items = "".join(
-        f'<a href="{ORIGIN if False else ""}{root(code)}{path}" lang="{LOCALE_TAGS[code]}"'
+        f'<a href="{root(code)}{path}" lang="{LOCALE_TAGS[code]}"'
         f'{" aria-current=\"true\"" if code == locale else ""}>'
         f"{esc(LOCALE_NAMES[code])}</a>"
         for code in LOCALES
@@ -320,13 +320,43 @@ def render_repo_pages(locale, data):
         )
 
 
+def ranking_source(data, window):
+    """Decide what a trending list is actually ordered by.
+
+    Returns ("growth", rows) or ("stars", rows). Previously the fallback was an
+    `or` inside the render call, so the page's lede claimed growth ranking while
+    showing a star-ordered list whenever a window had no qualifying movers. The
+    page must not be able to describe itself differently from what it did, so
+    the decision and the wording now come from the same value.
+    """
+    ranked = data["trending"][window][:100]
+    if ranked:
+        return "growth", ranked
+    return "stars", data["records"][:50]
+
+
+def fallback_notice(locale):
+    return (f'<div class="notice"><h3>{esc(t(locale, "fallback_title"))}</h3>'
+            f'<p>{esc(t(locale, "fallback_body", delta=prepare_data.MIN_ABS_DELTA))}'
+            f"</p></div>")
+
+
 def render_trending(locale, data):
     for window, name in WINDOWS.items():
-        ranked = data["trending"][window][:100] or data["records"][:50]
+        order, ranked = ranking_source(data, window)
         listing = "".join(
             repo_card(locale, record, window, rank=index)
             for index, record in enumerate(ranked, 1)
         )
+        if order == "growth":
+            lede = t(locale, f"lede_{name}")
+            explanation = history_notice(locale, data)
+        else:
+            lede = t(locale, "lede_stars")
+            # Explain the substitution on the window that made it. The global
+            # "still accumulating" notice is keyed on the 7-day counter and
+            # cannot speak for a window that simply had no movers.
+            explanation = history_notice(locale, data) or fallback_notice(locale)
         path = f"/trending/{name}/"
         write(
             locale,
@@ -334,11 +364,11 @@ def render_trending(locale, data):
             page(
                 locale,
                 f"{t(locale, f'window_{name}')} — gitpulse",
-                t(locale, "trending_desc", days=window),
+                t(locale, f"desc_{name}"),
                 path,
                 f"<h1>{esc(t(locale, f'window_{name}'))}</h1>"
-                f'<p class="lede">{esc(t(locale, "trending_lede", days=window))}</p>'
-                f"{history_notice(locale, data)}{listing}",
+                f'<p class="lede">{esc(lede)}</p>'
+                f"{explanation}{listing}",
                 data["generated_at"],
                 nav_key=name,
             ),

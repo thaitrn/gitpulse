@@ -176,6 +176,53 @@ def test_translated_chrome_actually_differs():
         print("  ok: each locale renders translated chrome")
 
 
+def test_page_never_claims_growth_ranking_it_did_not_do():
+    """A window with no qualifying movers must say so, not mislabel star order.
+
+    Regression: the fallback used to be an `or` inside the render call, so the
+    lede kept claiming "ranked by star growth" while showing a star-ordered
+    list. Fails without the ranking_source split.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        data, site_dir = build_into(tmp)
+
+        # Force the 1-day window empty while 7-day history still exists, which
+        # is exactly the state the global "accumulating" notice cannot describe.
+        data["trending"][1] = []
+        data["diagnostics"]["with_velocity"] = len(data["records"])
+        render_site.SITE_DIR = site_dir
+        render_site.render_trending(render_site.LOCALES[0], data)
+
+        markup = (site_dir / "trending" / "day" / "index.html").read_text()
+        growth_claim = render_site.t("en", "lede_day")
+        assert growth_claim not in markup, "page claimed growth ranking it did not do"
+        assert render_site.t("en", "lede_stars") in markup, "star ordering not stated"
+        assert render_site.t("en", "fallback_title") in markup, "no explanation shown"
+        print("  ok: empty window states star ordering and explains why")
+
+
+def test_ranking_source_reports_what_it_returns():
+    with tempfile.TemporaryDirectory() as tmp:
+        data, _site_dir = build_into(tmp)
+        order, rows = render_site.ranking_source(data, 7)
+        assert order == "growth" and rows, order
+        data["trending"][7] = []
+        order, rows = render_site.ranking_source(data, 7)
+        assert order == "stars" and rows, order
+        print("  ok: ranking_source labels growth vs stars correctly")
+
+
+def test_no_broken_plural_in_any_locale():
+    """Regression: the lede rendered "over 1 days"."""
+    with tempfile.TemporaryDirectory() as tmp:
+        _data, site_dir = build_into(tmp)
+        for locale in LOCALES:
+            base = site_dir if locale == LOCALES[0] else site_dir / locale
+            markup = (base / "trending" / "day" / "index.html").read_text()
+            assert "1 days" not in markup, f"{locale}: broken plural"
+        print("  ok: no broken plural in any locale")
+
+
 def test_crawled_text_is_escaped():
     with tempfile.TemporaryDirectory() as tmp:
         _data, site_dir = build_into(tmp)
@@ -244,6 +291,9 @@ if __name__ == "__main__":
         test_hreflang_covers_every_locale_and_x_default,
         test_lang_attribute_matches_locale,
         test_translated_chrome_actually_differs,
+        test_page_never_claims_growth_ranking_it_did_not_do,
+        test_ranking_source_reports_what_it_returns,
+        test_no_broken_plural_in_any_locale,
         test_crawled_text_is_escaped,
         test_json_ld_is_valid_json_and_cannot_break_out,
         test_velocity_branch_promotes_only_the_riser,
