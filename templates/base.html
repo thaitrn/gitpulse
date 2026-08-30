@@ -165,6 +165,19 @@ p{max-width:46rem}
   border-bottom:1px solid var(--line-strong);white-space:nowrap;
   position:sticky;top:0;background:var(--bg);
 }
+/* Sorting lives in the header rather than in separate routes: one click
+   re-ranks in place instead of a page load. The per-window routes stay for
+   deep links and indexing. */
+.board th button{
+  font:inherit;color:inherit;background:none;border:0;padding:var(--s2) 0;
+  cursor:pointer;display:inline-flex;align-items:center;gap:3px;
+  text-transform:inherit;letter-spacing:inherit;
+}
+.board th button:hover{color:var(--fg)}
+.board th[aria-sort] button{color:var(--fg)}
+.board th button .arrow{opacity:0;transition:opacity .15s}
+.board th[aria-sort] button .arrow{opacity:1}
+.board th[aria-sort="ascending"] button .arrow{transform:rotate(180deg)}
 .board th.left{text-align:left;padding-left:0}
 .board td{padding:var(--s3) 0 var(--s3) var(--s4);border-bottom:1px solid var(--line);
   text-align:right;white-space:nowrap;vertical-align:top}
@@ -269,6 +282,30 @@ $body
 <a href="https://github.com/thaitrn/gitpulse">$footer_source</a></p>
 </footer>
 <script>
+(function(){
+  var table=document.querySelector(".board");
+  if(!table)return;
+  var body=table.tBodies[0];
+  table.querySelectorAll("th[data-key] button").forEach(function(btn){
+    btn.addEventListener("click",function(){
+      var th=btn.parentNode;
+      var wasDesc=th.getAttribute("aria-sort")==="descending";
+      var dir=wasDesc?1:-1;
+      var index=Array.prototype.indexOf.call(th.parentNode.children,th);
+      var rows=Array.prototype.slice.call(body.rows);
+      rows.sort(function(a,b){
+        var x=a.cells[index].dataset.v,y=b.cells[index].dataset.v;
+        // Rows without a figure sink to the bottom whichever way we sort.
+        if(x==="")return 1;
+        if(y==="")return -1;
+        return (parseFloat(x)-parseFloat(y))*dir;
+      });
+      rows.forEach(function(r,i){r.cells[0].textContent=i+1;body.appendChild(r)});
+      table.querySelectorAll("th[aria-sort]").forEach(function(o){o.removeAttribute("aria-sort")});
+      th.setAttribute("aria-sort",wasDesc?"ascending":"descending");
+    });
+  });
+})();
 (function(){
   var b=document.getElementById("theme-toggle");
   if(!b)return;

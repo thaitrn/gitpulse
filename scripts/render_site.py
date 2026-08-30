@@ -195,13 +195,29 @@ def avatar_tile(owner):
             f'style="background:hsl({hue} 45% var(--tile-l))">{esc(initial)}</div>')
 
 
+SORT_ARROW = ('<svg class="arrow" width="8" height="8" viewBox="0 0 10 10" '
+              'aria-hidden="true"><path d="M5 9 1 2.5h8Z" fill="currentColor"/></svg>')
+
+
+def sort_header(locale, key, label, active, extra=""):
+    """A sortable column head. A real <button> so it is keyboard-reachable."""
+    classes = f' class="{extra}"' if extra else ""
+    sort_state = ' aria-sort="descending"' if active else ""
+    return (f"<th{classes}{sort_state} data-key=\"{key}\">"
+            f'<button type="button">{esc(label)}{SORT_ARROW}</button></th>')
+
+
 def pct_cell(record, window, extra=""):
     """One window's percentage. Null renders as a dash, never as zero."""
     pct = record.get(f"star_{window}d_pct")
     if pct is None:
-        return f'<td class="{extra}"><span class="pct pct-none">&mdash;</span></td>'
+        # Empty sort value, so a repo without a figure sinks to the bottom in
+        # both directions rather than sorting as if it were zero.
+        return (f'<td class="{extra}" data-v="">'
+                f'<span class="pct pct-none">&mdash;</span></td>')
     css = "pct-up" if pct > 0 else "pct-down"
-    return f'<td class="{extra}"><span class="pct {css}">{pct:+.1f}%</span></td>'
+    return (f'<td class="{extra}" data-v="{pct}">'
+            f'<span class="pct {css}">{pct:+.1f}%</span></td>')
 
 
 def live_windows(data):
@@ -235,24 +251,28 @@ def repo_row(locale, record, whitelist, rank, windows):
 <span class="cell-desc">{esc(record.get('description'))}</span>
 {f'<div class="cell-tags">{pills}</div>' if pills else ''}
 </div></div></td>
-<td>{compact(record['stars'])}</td>
+<td data-v="{record['stars']}">{compact(record['stars'])}</td>
 {"".join(pct_cell(record, w, extra="hide-sm" if w == 30 else "") for w in windows)}
-<td class="col-rate">{rate_cell}</td>
+<td class="col-rate" data-v="{rate if rate is not None else ''}">{rate_cell}</td>
 </tr>"""
 
 
-def board(locale, records, whitelist, data, start=1):
+def board(locale, records, whitelist, data, active_window=None, start=1):
     windows = live_windows(data)
     window_heads = "".join(
-        f'<th{" class=\"hide-sm\"" if window == 30 else ""}>'
-        f'{esc(t(locale, f"col_{window}d"))}</th>'
+        sort_header(locale, f"{window}d", t(locale, f"col_{window}d"),
+                    active=(window == active_window),
+                    extra="hide-sm" if window == 30 else "")
         for window in windows
     )
+    # The page's own ranking is the default sort; if that window has no figures
+    # the rate column is what actually ordered the rows, so it carries the mark.
+    rate_active = active_window not in windows
     head = (f'<tr><th class="rank"></th>'
             f'<th class="left">{esc(t(locale, "col_repo"))}</th>'
-            f'<th>{esc(t(locale, "col_stars"))}</th>'
+            f'{sort_header(locale, "stars", t(locale, "col_stars"), False)}'
             f"{window_heads}"
-            f'<th>{esc(t(locale, "col_rate"))}</th></tr>')
+            f'{sort_header(locale, "rate", t(locale, "col_rate"), rate_active)}</tr>')
     rows = "".join(
         repo_row(locale, record, whitelist, index, windows)
         for index, record in enumerate(records, start)
@@ -460,7 +480,7 @@ def render_trending(locale, data):
     for window, name in WINDOWS.items():
         order, pool = ranking_source(data, window)
         ranked, total = limited(pool, TRENDING_CAP)
-        listing = board(locale, ranked, data["topics"], data)
+        listing = board(locale, ranked, data["topics"], data, window)
         lede = t(locale, f"lede_{name}") if order == "growth" else t(locale, f"lede_{order}")
         explanation = window_state_notice(locale, data, window)
         path = f"/trending/{name}/"

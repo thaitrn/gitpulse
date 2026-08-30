@@ -380,6 +380,41 @@ def test_theme_toggle_is_labelled_in_every_locale():
         print("  ok: theme toggle carries a translated accessible label")
 
 
+def test_sortable_headers_are_buttons_with_sort_state():
+    """Sorting must be keyboard-reachable and announce which column is active."""
+    with tempfile.TemporaryDirectory() as tmp:
+        data, _site_dir = build_into(tmp)
+        markup = render_site.board("en", data["records"][:5], data["topics"], data)
+        assert markup.count("<th") >= 4
+        assert "<button type=\"button\">" in markup, "header is not a real button"
+        assert 'aria-sort="descending"' in markup, "no column marked as sorted"
+        assert markup.count('aria-sort=') == 1, "more than one column marked sorted"
+        print("  ok: sortable headers are buttons and mark one active column")
+
+
+def test_every_sortable_cell_carries_a_value():
+    """Sorting reads data-v; a cell without one would sort as garbage."""
+    with tempfile.TemporaryDirectory() as tmp:
+        data, _site_dir = build_into(tmp)
+        markup = render_site.board("en", data["records"][:5], data["topics"], data)
+        rows = re.findall(r"<tr>\n<td class=\"rank\">.*?</tr>", markup, re.S)
+        assert rows, "no rows rendered"
+        keys = len(re.findall(r"<th[^>]*data-key", markup))
+        for row in rows:
+            assert row.count("data-v=") == keys, (
+                f"row has {row.count('data-v=')} sortable cells for {keys} columns"
+            )
+        print(f"  ok: every row carries a value for all {keys} sortable columns")
+
+
+def test_absent_figures_sort_last_not_first():
+    """A repo with no figure must never outrank one that has data."""
+    record = {"full_name": "o/r", "language": None, "topics": [], "stars": 1,
+              "description": "d", "star_rate": None}
+    assert 'data-v=""' in render_site.pct_cell(record, 7)
+    print("  ok: absent figures carry an empty sort value")
+
+
 def test_dead_window_gets_no_column():
     """A column of dashes on every row reads as broken, not as pending."""
     with tempfile.TemporaryDirectory() as tmp:
@@ -635,6 +670,9 @@ if __name__ == "__main__":
         test_theme_choice_beats_the_os_in_both_directions,
         test_stored_theme_applies_before_first_paint,
         test_theme_toggle_is_labelled_in_every_locale,
+        test_sortable_headers_are_buttons_with_sort_state,
+        test_every_sortable_cell_carries_a_value,
+        test_absent_figures_sort_last_not_first,
         test_dead_window_gets_no_column,
         test_missing_window_renders_a_dash_not_zero,
         test_board_row_is_lighter_than_a_card_was,
