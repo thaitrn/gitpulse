@@ -89,6 +89,8 @@ STRINGS = {
         "col_repo": "Repository",
         "col_stars": "Stars",
         "col_rate": "Per day",
+        "pending_cols": "{cols} columns appear once enough daily snapshots exist "
+                        "({have} collected so far, {need} needed for the next one).",
         "col_1d": "1D",
         "col_7d": "7D",
         "col_30d": "30D",
@@ -195,6 +197,8 @@ STRINGS = {
         "col_repo": "Kho",
         "col_stars": "Sao",
         "col_rate": "Mỗi ngày",
+        "pending_cols": "Cột {cols} sẽ hiện khi đủ ảnh chụp hằng ngày "
+                        "(đã có {have}, cột kế tiếp cần {need}).",
         "col_1d": "1N",
         "col_7d": "7N",
         "col_30d": "30N",
@@ -292,6 +296,8 @@ STRINGS = {
         "col_repo": "仓库",
         "col_stars": "星标",
         "col_rate": "日均",
+        "pending_cols": "{cols} 列将在每日快照足够后出现"
+                        "（目前已采集 {have} 份，下一列需要 {need} 份）。",
         "col_1d": "1天",
         "col_7d": "7天",
         "col_30d": "30天",

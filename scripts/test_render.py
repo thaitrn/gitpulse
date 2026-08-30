@@ -415,6 +415,25 @@ def test_absent_figures_sort_last_not_first():
     print("  ok: absent figures carry an empty sort value")
 
 
+def test_hidden_columns_are_explained_not_just_absent():
+    """Hiding silently leaves no way to tell missing from broken from never-built."""
+    with tempfile.TemporaryDirectory() as tmp:
+        data = two_snapshot_data(tmp)
+        markup = render_site.board("en", data["records"][:3], data["topics"], data)
+        assert 'class="pending-cols"' in markup, "missing columns went unexplained"
+        assert render_site.t("en", "col_7d") in markup, "did not name the missing column"
+        print("  ok: absent columns are named with what they wait for")
+
+
+def test_no_note_once_every_column_is_live():
+    with tempfile.TemporaryDirectory() as tmp:
+        data = two_snapshot_data(tmp)
+        data["diagnostics"]["with_velocity_by_window"] = {1: 5, 7: 5, 30: 5}
+        markup = render_site.board("en", data["records"][:3], data["topics"], data)
+        assert 'class="pending-cols"' not in markup, "note shown with nothing pending"
+        print("  ok: no note once every column is live")
+
+
 def test_dead_window_gets_no_column():
     """A column of dashes on every row reads as broken, not as pending."""
     with tempfile.TemporaryDirectory() as tmp:
@@ -710,6 +729,8 @@ if __name__ == "__main__":
         test_sortable_headers_are_buttons_with_sort_state,
         test_every_sortable_cell_carries_a_value,
         test_absent_figures_sort_last_not_first,
+        test_hidden_columns_are_explained_not_just_absent,
+        test_no_note_once_every_column_is_live,
         test_dead_window_gets_no_column,
         test_missing_window_renders_a_dash_not_zero,
         test_board_row_is_lighter_than_a_card_was,

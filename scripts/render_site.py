@@ -256,6 +256,22 @@ def repo_row(locale, record, whitelist, rank, windows):
 </tr>"""
 
 
+def pending_columns_note(locale, data):
+    """Name the columns that are not there yet, and why.
+
+    Hiding an all-dashes column keeps the board clean, but hiding it silently
+    leaves no way to tell whether the figure is missing, broken, or never built.
+    Say which columns are coming and what they are waiting for.
+    """
+    missing = [w for w in WINDOWS if w not in live_windows(data)]
+    if not missing:
+        return ""
+    labels = ", ".join(t(locale, f"col_{w}d") for w in missing)
+    return (f'<p class="pending-cols">'
+            f'{esc(t(locale, "pending_cols", cols=labels, have=data["diagnostics"]["snapshots_loaded"], need=snapshots_needed(min(missing))))}'
+            f"</p>")
+
+
 def board(locale, records, whitelist, data, active_window=None, start=1):
     windows = live_windows(data)
     window_heads = "".join(
@@ -276,7 +292,8 @@ def board(locale, records, whitelist, data, active_window=None, start=1):
         repo_row(locale, record, whitelist, index, windows)
         for index, record in enumerate(records, start)
     )
-    return (f'<div class="board-wrap"><table class="board">'
+    return (f"{pending_columns_note(locale, data)}"
+            f'<div class="board-wrap"><table class="board">'
             f"<thead>{head}</thead><tbody>{rows}</tbody></table></div>")
 
 
