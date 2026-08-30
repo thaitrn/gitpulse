@@ -40,8 +40,8 @@ Consequences for the first checkpoint, so neither is mistaken for a defect:
   conclude the calculation is wrong when spot-checking against GitHub — compare
   against the same 11.6-hour span, not against 24 hours.
 - `MIN_ABS_DELTA = 50` is therefore applied to a half-length window. If nothing
-  clears it, `/trending/day` correctly shows the `no_movers` state. That is the
-  gate working, not a bug.
+  clears it, `/trending/day` correctly falls back to stars-per-day and says so.
+  That is the gate working, not a bug.
 
 Cron-to-cron gaps are ~24 hours, so this affects only the first pair. It is not
 worth special-casing a transient, but it is worth not misreading.
@@ -50,11 +50,12 @@ worth special-casing a transient, but it is worth not misreading.
 
 The cross-window badge renders here, not at 8 — on `/trending/week`,
 `other_windows` checks the day and month windows, so a repo in the daily ranking
-gets an "also today" badge even while the weekly page is still star-ordered.
+gets an "also today" badge even while the weekly page is still on the
+stars-per-day fallback.
 
 - [ ] `/trending/day` ranks by growth and carries **no** accumulating notice
-- [ ] `/trending/week` and `/month` are star-ordered **with** a notice stating
-      8 and 31 snapshots respectively
+- [ ] `/trending/week` and `/month` fall back to stars-per-day **with** a notice
+      stating 8 and 31 snapshots respectively, and say so in the lede
 - [ ] At least one cross-window badge renders somewhere
 - [ ] Spot-check three repos' 1-day deltas against GitHub's actual change
 - [ ] Measure the 1-day delta distribution — `MIN_ABS_DELTA = 50` was chosen
