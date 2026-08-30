@@ -107,10 +107,6 @@ p{max-width:46rem}
   max-width:44rem}
 .card-meta{display:flex;gap:var(--s4);flex-wrap:wrap;color:var(--muted);font-size:13.5px}
 .card-meta a{color:var(--muted)}
-.badge-window{
-  border:1px solid var(--line-strong);border-radius:999px;padding:1px var(--s2);
-  font-size:12px;color:var(--muted);
-}
 
 /* Momentum block: the product's differentiator, so it gets the largest number
    on the card and its own column rather than trailing the metadata row. */
@@ -133,6 +129,45 @@ p{max-width:46rem}
   transition:border-color .15s,color .15s;
 }
 .tags a:hover{color:var(--fg);border-color:var(--fg)}
+
+/* ---- board: dense comparison table ----
+   Cards cost ~1KB a row and show one window; a row costs ~280 bytes and shows
+   every window at once, which is what makes "who is hot" answerable at a glance. */
+.board-wrap{overflow-x:auto;margin:0 -1rem;padding:0 1rem}
+.board{border-collapse:collapse;width:100%;font-size:14px;min-width:44rem}
+.board th{
+  text-align:right;font-size:11.5px;font-weight:600;color:var(--muted);
+  text-transform:uppercase;letter-spacing:.05em;padding:0 0 var(--s2) var(--s4);
+  border-bottom:1px solid var(--line-strong);white-space:nowrap;
+  position:sticky;top:0;background:var(--bg);
+}
+.board th.left{text-align:left;padding-left:0}
+.board td{padding:var(--s3) 0 var(--s3) var(--s4);border-bottom:1px solid var(--line);
+  text-align:right;white-space:nowrap;vertical-align:top}
+.board td.left{text-align:left;padding-left:0;white-space:normal;width:100%}
+.board tr:hover td{background:var(--surface)}
+.board .rank{color:var(--muted);font-size:12.5px;padding-left:0;width:2.5rem;
+  text-align:right;padding-right:var(--s3)}
+.cell-repo{display:flex;gap:var(--s3);align-items:flex-start}
+.cell-repo .card-avatar{width:28px;height:28px;font-size:13px;border-radius:6px;flex:none}
+.cell-name{font-weight:600;font-size:14.5px;text-decoration:none;display:block}
+.cell-name:hover{text-decoration:underline}
+.cell-name .owner{color:var(--muted);font-weight:450}
+.cell-desc{display:block;color:var(--muted);font-size:13px;line-height:1.45;
+  margin-top:2px;max-width:38rem}
+.cell-tags{margin-top:var(--s1);display:flex;gap:var(--s1);flex-wrap:wrap}
+.cell-tags a{font-size:11.5px;color:var(--muted);text-decoration:none;
+  border:1px solid var(--line);border-radius:999px;padding:1px 7px}
+.cell-tags a:hover{color:var(--fg);border-color:var(--fg)}
+.pct{font-weight:640;font-variant-numeric:tabular-nums}
+.pct-up{color:var(--up)}
+.pct-down{color:var(--down)}
+.pct-none{color:var(--muted);font-weight:400}
+.col-rate{color:var(--muted);font-size:13px}
+@media(max-width:760px){
+  .board .hide-sm{display:none}
+  .board{min-width:26rem}
+}
 
 /* ---- notice / empty states ---- */
 .notice{

@@ -35,9 +35,9 @@ WINDOWS = {1: "day", 7: "week", 30: "month"}
 # members (largest 514), so raising the cap would add weight to exactly the
 # heaviest pages for almost no reach. Caps stay; what changes is that a truncated
 # list now says so.
-TRENDING_CAP = 100
+TRENDING_CAP = 300
 FACET_CAP = 200
-HOME_CAP = 30
+HOME_CAP = 50
 NAV_ITEMS = (
     ("day", "/trending/day/"),
     ("week", "/trending/week/"),
@@ -194,57 +194,70 @@ def avatar_tile(owner):
             f'style="background:hsl({hue} 45% var(--tile-l))">{esc(initial)}</div>')
 
 
-def other_windows(record, data, current_window):
-    """Windows other than this one where the repo is also ranked.
+def pct_cell(record, window, extra=""):
+    """One window's percentage. Null renders as a dash, never as zero."""
+    pct = record.get(f"star_{window}d_pct")
+    if pct is None:
+        return f'<td class="{extra}"><span class="pct pct-none">&mdash;</span></td>'
+    css = "pct-up" if pct > 0 else "pct-down"
+    return f'<td class="{extra}"><span class="pct {css}">{pct:+.1f}%</span></td>'
 
-    A repo trending across several windows is a stronger signal than one
-    appearing in a single window. The data is already computed; this is a set
-    membership check, not a new query.
+
+def live_windows(data):
+    """Windows holding figures for at least one repo.
+
+    A column of dashes for every row is worse than no column: it reads as broken
+    rather than as pending. Columns appear as their data arrives.
     """
-    found = []
-    for window, name in WINDOWS.items():
-        if window == current_window:
-            continue
-        if any(row["full_name"] == record["full_name"]
-               for row in data["trending"][window][:TRENDING_CAP]):
-            found.append(name)
-    return found
+    counts = data["diagnostics"]["with_velocity_by_window"]
+    return [window for window in WINDOWS if counts.get(window)]
 
 
-def repo_card(locale, record, whitelist, window=7, rank=None, data=None):
+def repo_row(locale, record, whitelist, rank, windows):
+    """A board row: identity plus every window at once.
+
+    The card layout showed one window per page, so comparing momentum meant
+    holding three pages in your head. A row costs a third of a card and answers
+    the question the site exists to answer.
+    """
     owner, name = record["full_name"].split("/", 1)
     pills = "".join(
         f'<a href="{root(locale)}/topics/{slug(topic)}/">{esc(topic)}</a>'
         for topic in prepare_data.card_topics(record, whitelist)
     )
-    # Curation leaves roughly a fifth of cards with no qualifying topic. An empty
-    # .tags element still carries its top margin, so emitting it would put a
-    # phantom gap under those cards and break the list's vertical rhythm.
-    topics = f'<div class="tags">{pills}</div>' if pills else ""
-    meta = [f"{compact(record['stars'])} {esc(t(locale, 'stars'))}"]
-    if record.get("language"):
-        meta.append(
-            f'<a href="{root(locale)}/languages/{slug(record["language"])}/">'
-            f'{esc(record["language"])}</a>'
-        )
-    if record.get("pushed_at"):
-        meta.append(f"{esc(t(locale, 'pushed'))} {esc(record['pushed_at'])}")
-    if data is not None:
-        meta += [
-            f'<span class="badge-window">{esc(t(locale, f"also_{name}"))}</span>'
-            for name in other_windows(record, data, window)
-        ]
-    rank_markup = f'<div class="card-rank">{rank}</div>' if rank else ""
-    return f"""<article class="card">{rank_markup}
-{avatar_tile(owner)}
-<div>
-<h3 class="card-title"><a href="{root(locale)}{repo_path(record['full_name'])}"><span class="owner">{esc(owner)}/</span>{esc(name)}</a></h3>
-<p class="card-desc">{esc(record.get('description'))}</p>
-<div class="card-meta">{''.join(f'<span>{item}</span>' for item in meta)}</div>
-{topics}
-</div>
-{momentum(locale, record, window)}
-</article>"""
+    rate = record.get("star_rate")
+    rate_cell = f"{rate:,.0f}" if rate is not None else "&mdash;"
+    return f"""<tr>
+<td class="rank">{rank}</td>
+<td class="left"><div class="cell-repo">{avatar_tile(owner)}<div>
+<a class="cell-name" href="{root(locale)}{repo_path(record['full_name'])}"><span class="owner">{esc(owner)}/</span>{esc(name)}</a>
+<span class="cell-desc">{esc(record.get('description'))}</span>
+{f'<div class="cell-tags">{pills}</div>' if pills else ''}
+</div></div></td>
+<td>{compact(record['stars'])}</td>
+{"".join(pct_cell(record, w, extra="hide-sm" if w == 30 else "") for w in windows)}
+<td class="col-rate">{rate_cell}</td>
+</tr>"""
+
+
+def board(locale, records, whitelist, data, start=1):
+    windows = live_windows(data)
+    window_heads = "".join(
+        f'<th{" class=\"hide-sm\"" if window == 30 else ""}>'
+        f'{esc(t(locale, f"col_{window}d"))}</th>'
+        for window in windows
+    )
+    head = (f'<tr><th class="rank"></th>'
+            f'<th class="left">{esc(t(locale, "col_repo"))}</th>'
+            f'<th>{esc(t(locale, "col_stars"))}</th>'
+            f"{window_heads}"
+            f'<th>{esc(t(locale, "col_rate"))}</th></tr>')
+    rows = "".join(
+        repo_row(locale, record, whitelist, index, windows)
+        for index, record in enumerate(records, start)
+    )
+    return (f'<div class="board-wrap"><table class="board">'
+            f"<thead>{head}</thead><tbody>{rows}</tbody></table></div>")
 
 
 def window_state(data, window):
@@ -446,10 +459,7 @@ def render_trending(locale, data):
     for window, name in WINDOWS.items():
         order, pool = ranking_source(data, window)
         ranked, total = limited(pool, TRENDING_CAP)
-        listing = "".join(
-            repo_card(locale, record, data["topics"], window, rank=index, data=data)
-            for index, record in enumerate(ranked, 1)
-        )
+        listing = board(locale, ranked, data["topics"], data)
         lede = t(locale, f"lede_{name}") if order == "growth" else t(locale, f"lede_{order}")
         explanation = window_state_notice(locale, data, window)
         path = f"/trending/{name}/"
@@ -504,9 +514,7 @@ def render_facets(locale, data):
                     else record.get("language") == value)
             ]
             shown, total = limited(members, FACET_CAP)
-            listing = "".join(
-                repo_card(locale, record, data["topics"]) for record in shown
-            )
+            listing = board(locale, shown, data["topics"], data)
             path = f"/{kind}/{slug(value)}/"
             write(
                 locale,
@@ -532,10 +540,7 @@ def render_home(locale, data):
     # this defect class in the first place.
     _order, pool = ranking_source(data, 7)
     ranked, _total = limited(pool, HOME_CAP)
-    listing = "".join(
-        repo_card(locale, record, data["topics"], rank=index, data=data)
-        for index, record in enumerate(ranked, 1)
-    )
+    listing = board(locale, ranked, data["topics"], data)
     selection = (f'<p class="mom-sub" style="font-size:14px;margin-bottom:var(--s4)">'
                  f'{esc(t(locale, "home_selection_note", shown=len(ranked)))}</p>')
     search = f"""<label for="q" style="display:block;font-size:14px;color:var(--muted);margin-bottom:var(--s2)">{esc(t(locale, 'search_label'))}</label>

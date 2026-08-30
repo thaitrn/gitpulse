@@ -334,25 +334,47 @@ def test_avatar_tile_cannot_inject_css():
     print("  ok: hostile owner name cannot reach the style attribute")
 
 
-def test_cross_window_badge_excludes_current_window():
+def test_board_shows_every_window_per_row():
+    """The point of the board: one row answers 1D, 7D and 30D at once."""
     with tempfile.TemporaryDirectory() as tmp:
         data, _site_dir = build_into(tmp)
-        record = data["trending"][7][0]
-        names = render_site.other_windows(record, data, 7)
-        assert "week" not in names, "badge named the window being viewed"
-        assert names, "expected the top weekly repo to rank in another window too"
-        print(f"  ok: cross-window badge lists {names}, never the current window")
+        record = data["records"][0]
+        windows = render_site.live_windows(data)
+        row = render_site.repo_row("en", record, data["topics"], 1, windows)
+        assert row.count('class="pct') == len(windows), "row/column count mismatch"
+        assert render_site.esc(record["full_name"].split("/")[1]) in row
+        print("  ok: each board row carries all three windows")
 
 
-def test_cross_window_badge_renders_translated():
+def test_dead_window_gets_no_column():
+    """A column of dashes on every row reads as broken, not as pending."""
     with tempfile.TemporaryDirectory() as tmp:
-        data, site_dir = build_into(tmp)
-        for locale in LOCALES:
-            base = site_dir if locale == LOCALES[0] else site_dir / locale
-            markup = (base / "trending" / "week" / "index.html").read_text()
-            assert 'class="badge-window"' in markup, f"{locale}: no badge rendered"
-            assert render_site.esc(render_site.t(locale, "also_day")) in markup, locale
-        print("  ok: cross-window badge present and translated in every locale")
+        data = two_snapshot_data(tmp)
+        windows = render_site.live_windows(data)
+        assert windows == [1], f"only the 1-day window has figures, got {windows}"
+        markup = render_site.board("en", data["records"][:3], data["topics"], data)
+        assert render_site.t("en", "col_1d") in markup
+        assert f'>{render_site.t("en", "col_7d")}<' not in markup, "empty column shown"
+        print("  ok: only windows holding figures get a column")
+
+
+def test_missing_window_renders_a_dash_not_zero():
+    record = {"full_name": "o/r", "language": None, "topics": [], "stars": 1000,
+              "description": "d", "star_rate": None}
+    for window in (1, 7, 30):
+        cell = render_site.pct_cell(record, window)
+        assert "pct-none" in cell and "0.0%" not in cell, cell
+    print("  ok: absent window figures render as a dash, never zero")
+
+
+def test_board_row_is_lighter_than_a_card_was():
+    """Density is the reason for the change; assert it did not regress."""
+    with tempfile.TemporaryDirectory() as tmp:
+        data, _site_dir = build_into(tmp)
+        row = render_site.repo_row("en", data["records"][0], data["topics"], 1,
+                                   render_site.live_windows(data))
+        assert len(row) < 900, f"row grew to {len(row)} bytes"
+        print(f"  ok: board row is {len(row)} bytes")
 
 
 def test_truncated_list_states_shown_of_total():
@@ -575,8 +597,10 @@ if __name__ == "__main__":
         test_no_broken_plural_in_any_locale,
         test_avatar_tile_is_deterministic_and_decorative,
         test_avatar_tile_cannot_inject_css,
-        test_cross_window_badge_excludes_current_window,
-        test_cross_window_badge_renders_translated,
+        test_board_shows_every_window_per_row,
+        test_dead_window_gets_no_column,
+        test_missing_window_renders_a_dash_not_zero,
+        test_board_row_is_lighter_than_a_card_was,
         test_truncated_list_states_shown_of_total,
         test_complete_list_says_nothing,
         test_truncation_note_present_in_every_locale,
