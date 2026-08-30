@@ -32,6 +32,7 @@ STRINGS = {
         "nav_methodology": "Methodology",
         "nav_label": "Primary",
         "lang_label": "Language",
+        "theme_label": "Switch between light and dark",
 
         "home_title": "gitpulse — GitHub repositories, ranked by momentum",
         "home_h1": "GitHub repositories, ranked by momentum",
@@ -139,6 +140,7 @@ STRINGS = {
         "nav_methodology": "Phương pháp",
         "nav_label": "Chính",
         "lang_label": "Ngôn ngữ",
+        "theme_label": "Chuyển giao diện sáng/tối",
 
         "home_title": "gitpulse — Kho GitHub xếp theo đà tăng trưởng",
         "home_h1": "Kho GitHub xếp theo đà tăng trưởng",
@@ -238,6 +240,7 @@ STRINGS = {
         "nav_methodology": "方法说明",
         "nav_label": "主导航",
         "lang_label": "语言",
+        "theme_label": "切换浅色/深色主题",
 
         "home_title": "gitpulse — 按增长动能排序的 GitHub 仓库",
         "home_h1": "按增长动能排序的 GitHub 仓库",

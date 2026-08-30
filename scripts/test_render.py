@@ -346,6 +346,40 @@ def test_board_shows_every_window_per_row():
         print("  ok: each board row carries all three windows")
 
 
+def test_theme_choice_beats_the_os_in_both_directions():
+    """An explicit choice must win whichever way the OS is set."""
+    css = (pathlib.Path(render_site.ROOT) / "templates" / "base.html").read_text()
+    assert ':root[data-theme="dark"]{' in css, "no explicit dark override"
+    assert ':root:not([data-theme="light"])' in css, (
+        "OS dark would override an explicit light choice"
+    )
+    print("  ok: explicit theme overrides the OS setting both ways")
+
+
+def test_stored_theme_applies_before_first_paint():
+    """A stored dark choice must not flash white while the page loads."""
+    with tempfile.TemporaryDirectory() as tmp:
+        _data, site_dir = build_into(tmp)
+        markup = (site_dir / "index.html").read_text()
+        head = markup.split("</head>")[0]
+        assert "localStorage.getItem" in head, "theme script is not in the head"
+        assert head.index("localStorage.getItem") < head.index("<style>"), (
+            "theme script must run before styles paint"
+        )
+        print("  ok: stored theme applies before first paint")
+
+
+def test_theme_toggle_is_labelled_in_every_locale():
+    with tempfile.TemporaryDirectory() as tmp:
+        _data, site_dir = build_into(tmp)
+        for locale in LOCALES:
+            base = site_dir if locale == LOCALES[0] else site_dir / locale
+            markup = (base / "index.html").read_text()
+            label = render_site.esc(render_site.t(locale, "theme_label"))
+            assert f'aria-label="{label}"' in markup, locale
+        print("  ok: theme toggle carries a translated accessible label")
+
+
 def test_dead_window_gets_no_column():
     """A column of dashes on every row reads as broken, not as pending."""
     with tempfile.TemporaryDirectory() as tmp:
@@ -598,6 +632,9 @@ if __name__ == "__main__":
         test_avatar_tile_is_deterministic_and_decorative,
         test_avatar_tile_cannot_inject_css,
         test_board_shows_every_window_per_row,
+        test_theme_choice_beats_the_os_in_both_directions,
+        test_stored_theme_applies_before_first_paint,
+        test_theme_toggle_is_labelled_in_every_locale,
         test_dead_window_gets_no_column,
         test_missing_window_renders_a_dash_not_zero,
         test_board_row_is_lighter_than_a_card_was,
