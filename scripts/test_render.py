@@ -472,8 +472,32 @@ def test_truncation_note_present_in_every_locale():
     print("  ok: truncation note translated in every locale")
 
 
-def test_home_is_not_a_duplicate_of_the_weekly_page():
-    """Same rows on both would be near-duplicate content on two indexed URLs."""
+def test_home_matches_a_window_page_only_while_no_window_has_data():
+    """Documents a real overlap rather than pretending it does not exist.
+
+    With window figures present, home ranks by rate and the window pages rank by
+    growth, so they differ. With none, every page falls back to rate and home is
+    the same list as /trending/day. That is transient and expected, but it is
+    live today, so it is asserted rather than assumed away.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        data, site_dir = build_into(tmp)
+        for window in render_site.WINDOWS:
+            data["trending"][window] = []
+        data["diagnostics"]["with_velocity_by_window"] = {1: 0, 7: 0, 30: 0}
+        render_site.SITE_DIR = site_dir
+        render_site.render_home(LOCALES[0], data)
+        render_site.render_trending(LOCALES[0], data)
+        first = lambda m: re.search(r'class="cell-name"[^>]*>.*?</a>', m, re.S).group(0)
+        home = (site_dir / "index.html").read_text()
+        day = (site_dir / "trending" / "day" / "index.html").read_text()
+        assert first(home) == first(day), (
+            "with no window data both should fall back to the same rate ranking"
+        )
+        print("  ok: overlap with /trending/day is confined to the no-data state")
+
+
+def test_home_differs_once_a_window_has_data():
     with tempfile.TemporaryDirectory() as tmp:
         data, site_dir = build_into(tmp)
         render_site.SITE_DIR = site_dir
@@ -483,7 +507,7 @@ def test_home_is_not_a_duplicate_of_the_weekly_page():
         week = (site_dir / "trending" / "week" / "index.html").read_text()
         first = lambda m: re.search(r'class="cell-name"[^>]*>.*?</a>', m, re.S).group(0)
         assert first(home) != first(week), "home leads with the same repo as /trending/week"
-        print("  ok: home ranks differently from the weekly page")
+        print("  ok: home ranks differently once a window has figures")
 
 
 def test_home_never_needs_the_accumulating_notice():
@@ -497,7 +521,10 @@ def test_home_never_needs_the_accumulating_notice():
         render_site.render_home(LOCALES[0], data)
         markup = (site_dir / "index.html").read_text()
         assert markup.count('<td class="rank">') > 0, "home rendered no rows"
-        print("  ok: home still ranks with no window data at all")
+        assert render_site.t("en", "notice_title") not in markup, (
+            "home carries a window notice for a ranking that needs no window"
+        )
+        print("  ok: home ranks with no window data and carries no window notice")
 
 
 def test_fallback_orders_by_rate_not_total_stars():
@@ -689,7 +716,8 @@ if __name__ == "__main__":
         test_truncated_list_states_shown_of_total,
         test_complete_list_says_nothing,
         test_truncation_note_present_in_every_locale,
-        test_home_is_not_a_duplicate_of_the_weekly_page,
+        test_home_matches_a_window_page_only_while_no_window_has_data,
+        test_home_differs_once_a_window_has_data,
         test_home_never_needs_the_accumulating_notice,
         test_fallback_orders_by_rate_not_total_stars,
         test_repo_too_young_gets_no_rate,

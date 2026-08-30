@@ -590,7 +590,6 @@ async function run(){{
 <p class="lede">{esc(t(locale, 'home_lede', tracked=f"{diagnostics['total_repos']:,}", published=f"{diagnostics['published']:,}"))}</p>
 {search}
 <h2>{esc(t(locale, 'rising'))}</h2>
-{history_notice(locale, data)}
 {selection}
 {listing}"""
     write(
