@@ -9,6 +9,7 @@ is bisected until it fits.
 Stdlib only: no third-party HTTP client, so the workflow needs no install step.
 """
 
+import http.client
 import json
 import os
 import sys
@@ -101,7 +102,13 @@ class GitHubClient:
                 if error.code in (401, 404):
                     raise
                 last_error = error
-            except (urllib.error.URLError, TimeoutError) as error:
+            except (
+                urllib.error.URLError,
+                TimeoutError,
+                http.client.HTTPException,
+            ) as error:
+                # Covers dropped/truncated connections (e.g. IncompleteRead),
+                # which are as transient as a URLError and should retry the same way.
                 last_error = error
             else:
                 errors = body.get("errors") or []

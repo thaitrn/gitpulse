@@ -7,6 +7,7 @@ the sharding recursion can be checked against a known-correct answer.
 """
 
 import gzip
+import http.client
 import json
 import pathlib
 import sys
@@ -16,7 +17,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
 import write_snapshot
 from config import MIN_STARS, SEARCH_RESULT_CAP
-from fetch_repos import ShardTruncated, crawl_shards, fetch_all, normalise
+from fetch_repos import GitHubClient, ShardTruncated, crawl_shards, fetch_all, normalise
 
 
 class FakeClient:
@@ -181,6 +182,28 @@ def test_normalise_tolerates_null_fields():
     print("  ok: null fields normalise cleanly")
 
 
+def test_query_retries_incomplete_read():
+    """A dropped/truncated connection (IncompleteRead) must retry, not crash.
+
+    Regression for a real crawl failure: the except clause only covered
+    URLError/TimeoutError, so http.client.IncompleteRead propagated uncaught.
+    """
+    client = GitHubClient("fake-token")
+    calls = {"n": 0}
+
+    def flaky_post(query, variables):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise http.client.IncompleteRead(b"", 10)
+        return {"data": {"rateLimit": {"cost": 1, "remaining": 4999}, "ok": True}}
+
+    client._post = flaky_post
+    data = client.query("query", {})
+    assert calls["n"] == 2
+    assert data["ok"] is True
+    print("  ok: IncompleteRead retried instead of crashing")
+
+
 if __name__ == "__main__":
     for check in [
         test_sharding_covers_everything_without_truncation,
@@ -190,6 +213,7 @@ if __name__ == "__main__":
         test_first_seen_survives_and_stamps_new,
         test_snapshot_rerun_is_byte_identical,
         test_normalise_tolerates_null_fields,
+        test_query_retries_incomplete_read,
     ]:
         print(check.__name__)
         check()
