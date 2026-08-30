@@ -45,6 +45,15 @@ jobs:
           python3 scripts/test_pipeline.py
           python3 scripts/test_render.py
 
+      # Accrual checkpoints land days to a month apart. Printing the state on
+      # every deploy makes reaching one something the log reports rather than
+      # something a person has to remember to check. Fails the run if a window
+      # holds figures while its page would still describe itself otherwise.
+      - name: State report
+        env:
+          PYTHONUNBUFFERED: "1"
+        run: python3 scripts/report_state.py
+
       - name: Render site
         env:
           PYTHONUNBUFFERED: "1"
