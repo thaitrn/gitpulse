@@ -16,6 +16,9 @@ LOCALES = ("en", "vi", "zh")
 
 LOCALE_NAMES = {"en": "English", "vi": "Tiếng Việt", "zh": "中文"}
 
+# Shown in the switcher. The full name stays as the accessible label.
+LOCALE_SHORT = {"en": "EN", "vi": "VI", "zh": "中"}
+
 # BCP 47 tags for the lang attribute and hreflang. "zh-Hans" rather than bare
 # "zh": the copy is Simplified, and being explicit avoids Traditional readers
 # being served the wrong variant.
@@ -45,7 +48,7 @@ STRINGS = {
         "search_none": "No repositories match that search.",
         "showing_note": "Showing {shown} of {total}.",
         "home_selection_note": "A selection of {shown}. Browse the full set by topic or language.",
-        "rising": "Rising this week",
+        "rising": "Highest momentum",
 
         "lede_day": "Ranked by star growth over the last day.",
         "lede_week": "Ranked by star growth over the last 7 days.",
@@ -153,7 +156,7 @@ STRINGS = {
         "search_none": "Không có kho nào khớp.",
         "showing_note": "Hiển thị {shown} trong {total}.",
         "home_selection_note": "Một tuyển chọn {shown} kho. Xem đầy đủ theo chủ đề hoặc ngôn ngữ.",
-        "rising": "Tăng mạnh tuần này",
+        "rising": "Đà tăng mạnh nhất",
 
         "lede_day": "Xếp theo mức tăng sao trong 1 ngày qua.",
         "lede_week": "Xếp theo mức tăng sao trong 7 ngày qua.",
@@ -251,7 +254,7 @@ STRINGS = {
         "search_none": "没有匹配的仓库。",
         "showing_note": "显示 {total} 个中的 {shown} 个。",
         "home_selection_note": "精选 {shown} 个仓库。可按主题或语言浏览完整列表。",
-        "rising": "本周上升",
+        "rising": "动能最强",
 
         "lede_day": "按过去 1 天的星标增长排序。",
         "lede_week": "按过去 7 天的星标增长排序。",

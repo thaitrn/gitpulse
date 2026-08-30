@@ -69,7 +69,11 @@ header{border-bottom:1px solid var(--line);background:var(--bg)}
 .brand{font-size:17px;font-weight:650;letter-spacing:-.01em;text-decoration:none;color:inherit;
   display:inline-flex;align-items:center;gap:var(--s2)}
 .brand .dot{width:9px;height:9px;border-radius:50%;background:var(--up);flex:none}
-nav{display:flex;gap:var(--s1);flex-wrap:wrap;margin-left:auto}
+nav{display:flex;gap:var(--s1);flex-wrap:wrap;margin-left:auto;align-items:center}
+.segmented{display:inline-flex;border:1px solid var(--line-strong);border-radius:6px;
+  padding:2px;gap:2px;margin-right:var(--s2)}
+.segmented a{padding:var(--s2) var(--s3);border-radius:4px;font-size:13px}
+.segmented a[aria-current=page]{background:var(--surface);color:var(--fg);font-weight:600}
 nav a{
   font-size:14px;text-decoration:none;color:var(--muted);
   /* 44px min touch target via padding, not a fixed height that breaks wrapping. */
@@ -79,8 +83,8 @@ nav a:hover{color:var(--fg);background:var(--surface)}
 nav a[aria-current=page]{color:var(--fg);font-weight:600;background:var(--surface)}
 .langs{display:flex;gap:2px;align-items:center;border:1px solid var(--line-strong);
   border-radius:6px;padding:2px;margin-left:var(--s2)}
-.langs a{font-size:13px;padding:var(--s2) var(--s3);border-radius:4px;text-decoration:none;
-  color:var(--muted);line-height:1}
+.langs a{font-size:12.5px;font-weight:600;padding:var(--s2) 9px;border-radius:4px;
+  text-decoration:none;color:var(--muted);line-height:1;min-width:24px;text-align:center}
 .langs a:hover{color:var(--fg);background:var(--surface)}
 .langs a[aria-current=true]{color:var(--fg);background:var(--surface);font-weight:600}
 .theme-btn{
@@ -134,15 +138,6 @@ p{max-width:46rem}
 
 /* Momentum block: the product's differentiator, so it gets the largest number
    on the card and its own column rather than trailing the metadata row. */
-.momentum{text-align:right;min-width:8.5rem}
-.mom-value{
-  display:inline-flex;align-items:center;gap:var(--s1);
-  font-size:19px;font-weight:670;letter-spacing:-.01em;line-height:1.2;
-  padding:var(--s1) var(--s2);border-radius:6px;
-}
-.mom-value svg{flex:none}
-.mom-up{color:var(--up);background:var(--up-bg)}
-.mom-down{color:var(--down);background:var(--down-bg)}
 .mom-none{color:var(--muted);font-weight:500;font-size:15px}
 .mom-sub{display:block;color:var(--muted);font-size:12.5px;margin-top:var(--s1)}
 
@@ -250,8 +245,7 @@ footer p{margin:0 0 var(--s2)}
   .card{grid-template-columns:auto 1fr}
   .card:has(.card-rank){grid-template-columns:auto auto 1fr}
   .card-rank{grid-row:auto}
-  .momentum{grid-column:1/-1;text-align:left}
-  nav{margin-left:0}
+    nav{margin-left:0}
   .langs{margin-left:0}
 }
 @media(prefers-reduced-motion:reduce){

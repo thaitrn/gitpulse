@@ -18,7 +18,7 @@ import urllib.parse
 
 import i18n
 import prepare_data
-from i18n import LOCALES, LOCALE_NAMES, LOCALE_TAGS, t
+from i18n import LOCALES, LOCALE_NAMES, LOCALE_SHORT, LOCALE_TAGS, t
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 SITE_DIR = ROOT / "site"
@@ -37,7 +37,7 @@ WINDOWS = {1: "day", 7: "week", 30: "month"}
 # list now says so.
 TRENDING_CAP = 300
 FACET_CAP = 200
-HOME_CAP = 50
+HOME_CAP = TRENDING_CAP
 NAV_ITEMS = (
     ("day", "/trending/day/"),
     ("week", "/trending/week/"),
@@ -116,21 +116,37 @@ def alternates(path):
 
 
 def nav_markup(locale, current):
-    items = "".join(
+    """Trending windows group into one segmented control; the rest are links.
+
+    Three separate nav entries read as three destinations. They are three
+    settings of one thing, and the table header now switches between them
+    without a page load, so they should not each claim top-level weight. The
+    routes stay for deep links and indexing.
+    """
+    windows = "".join(
+        f'<a href="{root(locale)}/trending/{key}/"'
+        f'{" aria-current=\"page\"" if key == current else ""}>'
+        f"{esc(t(locale, f'nav_{key}'))}</a>"
+        for key in ("day", "week", "month")
+    )
+    pages = "".join(
         f'<a href="{root(locale)}{href}"'
         f'{" aria-current=\"page\"" if key == current else ""}>'
         f"{esc(t(locale, f'nav_{key}'))}</a>"
         for key, href in NAV_ITEMS
+        if key in ("topics", "languages", "methodology")
     )
-    return f'<nav aria-label="{esc(t(locale, "nav_label"))}">{items}</nav>'
+    return (f'<nav aria-label="{esc(t(locale, "nav_label"))}">'
+            f'<span class="segmented">{windows}</span>{pages}</nav>')
 
 
 def language_switcher(locale, path):
     """Links to the same page in every locale, not just to each locale's home."""
     items = "".join(
-        f'<a href="{root(code)}{path}" lang="{LOCALE_TAGS[code]}"'
+        f'<a href="{root(code)}{path}" lang="{LOCALE_TAGS[code]}" '
+        f'title="{esc(LOCALE_NAMES[code])}" aria-label="{esc(LOCALE_NAMES[code])}"'
         f'{" aria-current=\"true\"" if code == locale else ""}>'
-        f"{esc(LOCALE_NAMES[code])}</a>"
+        f"{esc(LOCALE_SHORT[code])}</a>"
         for code in LOCALES
     )
     return (f'<div class="langs" role="group" '
@@ -162,23 +178,6 @@ def page(locale, title, description, path, body, generated_at,
 def repo_path(full_name):
     owner, name = full_name.split("/", 1)
     return f"/repo/{slug(owner)}/{slug(name)}/"
-
-
-def momentum(locale, record, window=7):
-    """The differentiator, given its own column and the largest number on a card.
-
-    Direction is carried by an arrow and a signed number, never by colour alone.
-    """
-    delta, pct = record.get(f"star_{window}d"), record.get(f"star_{window}d_pct")
-    if delta is None or pct is None:
-        return ('<div class="momentum"><span class="mom-value mom-none">&mdash;</span>'
-                f'<span class="mom-sub">{esc(t(locale, "no_history"))}</span></div>')
-    arrow = ARROW_UP if delta > 0 else ARROW_DOWN
-    css = "mom-up" if delta > 0 else "mom-down"
-    label = f"{delta:+,} {t(locale, 'stars')}, {window}d"
-    return (f'<div class="momentum"><span class="mom-value {css}" '
-            f'aria-label="{esc(label)}">{arrow}{pct:+.1f}%</span>'
-            f'<span class="mom-sub">{delta:+,} &middot; {window}d</span></div>')
 
 
 def avatar_tile(owner):
@@ -555,12 +554,13 @@ def render_facets(locale, data):
 
 
 def render_home(locale, data):
-    # Through ranking_source, not a second copy of the same fallback: the home
-    # page had its own `or data["records"]`, so it kept showing the all-time list
-    # after the trending pages stopped. Duplicated decision logic is what produced
-    # this defect class in the first place.
-    _order, pool = ranking_source(data, 7)
-    ranked, _total = limited(pool, HOME_CAP)
+    # Home ranks by lifetime stars-per-day, not by a window. Giving it the same
+    # rows as /trending/week made the two pages near-duplicates, and rate is the
+    # one ranking that never depends on accumulated history, so the landing page
+    # is never empty or caveated.
+    pool = [r for r in data["records"] if r.get("star_rate") is not None]
+    pool.sort(key=lambda r: (-r["star_rate"], r["full_name"]))
+    ranked, _total = limited(pool or data["records"], HOME_CAP)
     listing = board(locale, ranked, data["topics"], data)
     selection = (f'<p class="mom-sub" style="font-size:14px;margin-bottom:var(--s4)">'
                  f'{esc(t(locale, "home_selection_note", shown=len(ranked)))}</p>')
